@@ -15,27 +15,29 @@ int main()
 	startupInfo.cb = sizeof(startupInfo);
 	ZeroMemory(&processInformation, sizeof(processInformation));
 
-	bCreateProcessResult = CreateProcessA(NULL, "\"explorer.exe\"", NULL, NULL, FALSE,
-		DETACHED_PROCESS, NULL, NULL, &startupInfo, &processInformation);
-	if (!bCreateProcessResult) 
+	if ((bCreateProcessResult = CreateProcessA(NULL, "\"explorer.exe\"", NULL, NULL, FALSE,
+		DETACHED_PROCESS, NULL, NULL, &startupInfo, &processInformation)) == FALSE)
 	{
-		printf("[-] CreateProcess failed: (%d).\n", GetLastError());
+		printf("[-] CreateProcess failed: (%lu).\n", GetLastError());
 		goto Cleanup;
 	}
 
 	dwPid = processInformation.dwProcessId;
-	hProcessHandle = OpenProcess(PROCESS_VM_WRITE, FALSE, dwPid);
-	if (!hProcessHandle) 
+	if ((hProcessHandle = OpenProcess(PROCESS_VM_OPERATION, FALSE, dwPid)) == INVALID_HANDLE_VALUE)
 	{
-		printf("[-] Could not get handle to target process: (%d).\n", GetLastError());
+		printf("[-] Could not get handle to target process: (%lu).\n", GetLastError());
 		goto Cleanup;
 	}
 
-	pRemoteBuffer = VirtualAllocEx(hProcessHandle, NULL, sizeof(cModuleToInject), MEM_COMMIT, PAGE_READWRITE);
-	if (!pRemoteBuffer)
+	if ((pRemoteBuffer = VirtualAllocEx(hProcessHandle, NULL, sizeof(cModuleToInject), MEM_COMMIT, PAGE_READWRITE)) == NULL)
 	{
-		printf("[-] Failed allocating memory in target process: (%d).\n", GetLastError());
+		printf("[-] Failed allocating memory in target process: (%lu).\n", GetLastError());
 		goto Cleanup;
+	}
+
+	if (!WriteProcessMemory(hProcessHandle, pRemoteBuffer, (LPVOID)cModuleToInject, sizeof(cModuleToInject), NULL))
+	{
+
 	}
 
 Cleanup:
