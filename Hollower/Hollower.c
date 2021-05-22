@@ -75,10 +75,14 @@ int main()
 			if (strcmp(cRemoteModuleName, "amsi.dll") == 0)
 			{
 				printf("[+] %s at %p\n", cRemoteModuleName, (VOID*)modules[i]);
-				break;
+				goto Continue;
 			}
 		}
 
+		puts("[-] Remote module not found\n");
+		goto Cleanup;
+		
+Continue:
 		// get DLL's AddressOfEntryPoint
 		if ((pTargetProcessHeaderBuffer = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, headerBufferSize)) == NULL) {
 			printf("[-] Unable to get DLL's AddressOfEntryPoint: (%lu).\n", GetLastError());
