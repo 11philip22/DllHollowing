@@ -214,7 +214,7 @@ BOOL HollowDLL(uint8_t** ppMapBuf, uint64_t* pqwMapBufSize, const uint8_t* pCode
 					}
 
 					if (pFileBuf != NULL) {
-						VirtualFree(pFileBuf, dwFileSize, MEM_DECOMMIT | MEM_RELEASE);
+						VirtualFree(pFileBuf, 0, MEM_RELEASE);
 					}
 
 					if (hFile != INVALID_HANDLE_VALUE) {
