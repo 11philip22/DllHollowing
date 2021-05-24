@@ -20,8 +20,8 @@ PVOID GetPAFromRVA(uint8_t* pPeBuf, IMAGE_NT_HEADERS* pNtHdrs, IMAGE_SECTION_HEA
 // Hollower logic
 //
 
-BOOL HollowDll(uint8_t** ppMapBuf, uint64_t* pqwMapBufSize, const uint8_t* pCodeBuf, 
-			   const uint32_t dwReqBufSize, uint8_t** ppMappedCode, const BOOL bTxF, const BOOL bIsElevated) {
+BOOL HollowDll(uint8_t** ppMapBuf, uint64_t* pqwMapBufSize, const uint8_t* pCodeBuf, const uint32_t dwReqBufSize, 
+			   uint8_t** ppMappedCode, const BOOL bTxF, const BOOL bIsElevated) {
 	WIN32_FIND_DATAW		wfd = { 0 };
 	WCHAR					cSearchFilePath[MAX_PATH] = { 0 };
 	WCHAR					cTempPath[MAX_PATH] = { 0 };
