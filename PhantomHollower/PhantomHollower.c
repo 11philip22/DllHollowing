@@ -389,7 +389,7 @@ INT main() {
 	}
 
 	// Check if TxF is supported
-	if (!IsWindowsVistaOrGreater) {  // Does this really work
+	if (!IsWindowsVistaOrGreater()) {  // Does this really work
 		puts("[*] TxF is not supported\r\n");
 		bTxF = FALSE;
 	}
