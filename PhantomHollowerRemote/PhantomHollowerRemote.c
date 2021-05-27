@@ -344,8 +344,8 @@ BOOL CheckRelocRange(PBYTE pRelocBuf, UINT dwStartRVA, UINT dwEndRVA) {
 	BOOL bWithinRange = FALSE;
 
 	for (pCurrentRelocBlock = (IMAGE_BASE_RELOCATION*)pRelocBuf, dwX = 0, dwRelocBufOffset = 0; pCurrentRelocBlock->SizeOfBlock; dwX++) {
-		const UINT dwNumBlocks = ((pCurrentRelocBlock->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(uint16_t));
-		uint16_t* pwCurrentRelocEntry = (uint16_t*)((PBYTE)pCurrentRelocBlock + sizeof(IMAGE_BASE_RELOCATION));
+		const UINT dwNumBlocks = ((pCurrentRelocBlock->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(WORD));
+		WORD* pwCurrentRelocEntry = (WORD*)((PBYTE)pCurrentRelocBlock + sizeof(IMAGE_BASE_RELOCATION));
 
 		for (UINT dwY = 0; dwY < dwNumBlocks; dwY++, pwCurrentRelocEntry++) {
 #ifdef _WIN64
@@ -419,7 +419,7 @@ INT main() {
 	ZeroMemory(&processInformation, sizeof processInformation);
 
 	// Opens process
-	if (CreateProcessA(NULL, "\"calc.exe\"", NULL, NULL, FALSE, DETACHED_PROCESS, NULL, NULL, &startupInfo, &processInformation)) {
+	if (CreateProcessA(NULL, "\"notepad.exe\"", NULL, NULL, FALSE, DETACHED_PROCESS, NULL, NULL, &startupInfo, &processInformation)) {
 
 		// Get handle to process
 		dwPid = processInformation.dwProcessId;
