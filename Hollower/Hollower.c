@@ -12,7 +12,7 @@ int main()
 	HMODULE					lphModule[256] = { 0 };
 	HMODULE					hRemoteModule;
 	HMODULE					hKernel32;
-	HANDLE					hProcess;
+	HANDLE					hProcess = NULL;
 	HANDLE					hDllThread = NULL;
 	FARPROC					llLoadLibraryWAddress;
 	const SIZE_T			cbModulesSize = sizeof(lphModule);
@@ -44,6 +44,7 @@ int main()
 			if ((hKernel32 = GetModuleHandleA("Kernel32")) != NULL) {
 				llLoadLibraryWAddress = GetProcAddress(hKernel32, "LoadLibraryW");
 				threadRoutine = (PTHREAD_START_ROUTINE)llLoadLibraryWAddress;
+
 				if ((hDllThread = CreateRemoteThread(hProcess, NULL, 0, threadRoutine, pvRemoteBuffer, 0, NULL))) {
 					WaitForSingleObject(hDllThread, 1000);
 
@@ -87,6 +88,8 @@ Continue:
 	}
 
 Cleanup:
+	if (hProcess)
+		CloseHandle(hProcess);
 	if (processInformation.hProcess)
 		CloseHandle(processInformation.hProcess);
 	if (processInformation.hThread)
