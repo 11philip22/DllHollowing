@@ -2,12 +2,6 @@
 #include <Windows.h>
 #include <Psapi.h>
 
-typedef struct MY_CLIENT_ID
-{
-	PVOID UniqueProcess;
-	PVOID UniqueThread;
-} MY_CLIENT_ID, * MY_PCLIENT_ID;
-
 int main()
 {
 	STARTUPINFOA			startupInfo;
