@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Hollower.c">
+    <ClCompile Include="PlainHollower.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
