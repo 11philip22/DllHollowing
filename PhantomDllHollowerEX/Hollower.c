@@ -169,6 +169,8 @@ INT main() {
 				goto IterNext;
 			}
 
+			SetFilePointer(hFile, 0, NULL, FILE_BEGIN);
+
 			IMAGE_DOS_HEADER* pDosHdr = (IMAGE_DOS_HEADER*)pFileBuf;
 			IMAGE_NT_HEADERS* pNtHdrs = (IMAGE_NT_HEADERS*)(pFileBuf + pDosHdr->e_lfanew);
 			IMAGE_SECTION_HEADER* pSectHdrs = (IMAGE_SECTION_HEADER*)((PBYTE)&pNtHdrs->OptionalHeader + sizeof(IMAGE_OPTIONAL_HEADER));
@@ -248,7 +250,7 @@ INT main() {
 			}
 
 			qwMapBufSize = 0; // The map view is an in and out parameter, if it isn't zero the map may have its size overwritten
-			ntStatus = pNtMapViewOfSection(hSection, hProcess, (void**)pMapBuf, 0, 0, NULL, (PSIZE_T)qwMapBufSize, 1, 0, PAGE_READONLY); // AllocationType of MEM_COMMIT|MEM_RESERVE is not needed for SEC_IMAGE.
+			ntStatus = pNtMapViewOfSection(hSection, hProcess, (PVOID)pMapBuf, 0, 0, NULL, qwMapBufSize, 1, 0, PAGE_READONLY); // AllocationType of MEM_COMMIT|MEM_RESERVE is not needed for SEC_IMAGE.
 			if (NT_SUCCESS(ntStatus)) {
 				if (qwMapBufSize >= pNtHdrs->OptionalHeader.SizeOfImage) {
 					printf("[*] %ws - mapped size: %I64u\r\n", wfd.cFileName, qwMapBufSize);
