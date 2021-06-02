@@ -106,7 +106,6 @@ INT main() {
 			NTSTATUS				ntStatus;
 			PBYTE					pFileBuf;
 			OBJECT_ATTRIBUTES		objAttr = { sizeof(OBJECT_ATTRIBUTES) };
-			CONST UINT				dwFileSize = GetFileSize(hFile, NULL);
 			UINT					dwBytesRead = 0;
 			BOOL					bTxF_Valid = FALSE;
 			UINT					dwCodeRva = 0;
@@ -163,6 +162,7 @@ INT main() {
 				continue;
 			}
 
+			CONST UINT dwFileSize = GetFileSize(hFile, NULL);
 			pFileBuf = VirtualAlloc(NULL, dwFileSize, MEM_COMMIT, PAGE_READWRITE);
 
 			if (!ReadFile(hFile, pFileBuf, dwFileSize, (PDWORD)&dwBytesRead, NULL)) {
@@ -276,12 +276,16 @@ IterNext:
 				CloseHandle(hTransaction);
 			}
 
-			DeleteFileW(cTempFilePath);
+			if (!bIsElevated) {
+				DeleteFileW(cTempFilePath);
+			}
 			
 		} while (!bMapped && FindNextFileW(hFind, &wfd));
 
 		FindClose(hFind);
 	}
+
+
 
 Cleanup:
 	if (processInformation.hProcess) {
