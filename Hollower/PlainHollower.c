@@ -35,7 +35,7 @@ INT main()
 	}
 
 	dwPid = processInformation.dwProcessId;
-	if ((hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid)) != INVALID_HANDLE_VALUE) {
+	if ((hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid)) == INVALID_HANDLE_VALUE) {
 		goto Cleanup;
 	}
 
