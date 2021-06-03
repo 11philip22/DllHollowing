@@ -15,10 +15,11 @@ typedef struct MY_CLIENT_ID
 } MY_CLIENT_ID, * MY_PCLIENT_ID;
 
 // ReSharper disable CppInconsistentNaming
-typedef LONG(__stdcall* NTCREATESECTION)(HANDLE*, ULONG, POBJECT_ATTRIBUTES, LARGE_INTEGER*, ULONG, ULONG, HANDLE);
-typedef LONG(__stdcall* NTMAPVIEWOFSECTION)(HANDLE, HANDLE, PVOID*, ULONG_PTR, SIZE_T, PLARGE_INTEGER, PSIZE_T, DWORD, ULONG, ULONG);
+typedef NTSTATUS(__stdcall* NTCREATESECTION)(HANDLE*, ULONG, POBJECT_ATTRIBUTES, LARGE_INTEGER*, ULONG, ULONG, HANDLE);
+typedef NTSTATUS(__stdcall* NTMAPVIEWOFSECTION)(HANDLE, HANDLE, PVOID*, ULONG_PTR, SIZE_T, PLARGE_INTEGER, PSIZE_T, DWORD, ULONG, ULONG);
 typedef NTSTATUS(__stdcall* NTCREATETRANSACTION)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, LPGUID, HANDLE, ULONG, ULONG, ULONG, PLARGE_INTEGER, PUNICODE_STRING);
 typedef NTSTATUS(__stdcall* RTLCREATEUSERTHREAD)(HANDLE, PSECURITY_DESCRIPTOR, BOOLEAN, ULONG, PULONG, PULONG, PVOID, PVOID, PHANDLE, MY_PCLIENT_ID);
+typedef NTSTATUS(__stdcall* NTCLOSE)(HANDLE);
 // ReSharper restore CppInconsistentNaming
 
 BOOL CheckRelocRange(PBYTE pRelocBuf, UINT dwStartRVA, UINT dwEndRVA);
@@ -53,6 +54,7 @@ INT main() {
 	NTMAPVIEWOFSECTION		pNtMapViewOfSection;
 	NTCREATETRANSACTION		pNtCreateTransaction;
 	RTLCREATEUSERTHREAD		pRtlCreateUserThread;
+	NTCLOSE					pNtClose;
 
 	//
 	// Load required functions from ntdll
@@ -63,6 +65,7 @@ INT main() {
 	pNtMapViewOfSection = (NTMAPVIEWOFSECTION)GetProcAddress(hNtdll, "NtMapViewOfSection");
 	pNtCreateTransaction = (NTCREATETRANSACTION)GetProcAddress(hNtdll, "NtCreateTransaction");
 	pRtlCreateUserThread = (RTLCREATEUSERTHREAD)GetProcAddress(hNtdll, "RtlCreateUserThread");
+	pNtClose = (NTCLOSE)GetProcAddress(hNtdll, "NtClose");
 
 	//
 	// Check if elevated
@@ -284,6 +287,10 @@ IterNext:
 
 			if (hTransaction != INVALID_HANDLE_VALUE) {
 				CloseHandle(hTransaction);
+			}
+
+			if (hSection) {
+				pNtClose(hSection);
 			}
 
 			if (!bIsElevated) {
