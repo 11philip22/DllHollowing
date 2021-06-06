@@ -67,7 +67,7 @@ INT main() {
 	pRtlCreateUserThread = (RTLCREATEUSERTHREAD)GetProcAddress(hNtdll, "RtlCreateUserThread");
 	pNtClose = (NTCLOSE)GetProcAddress(hNtdll, "NtClose");
 	if (hNtdll) {
-		CloseHandle(hNtdll);
+		FreeLibrary(hNtdll);
 	}
 
 	//
