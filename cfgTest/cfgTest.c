@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <Windows.h>
 #include <psapi.h>
+#include <wdbgexts.h>
 
 #include "cfgTest.h"
 
@@ -8,7 +9,7 @@ BOOL GetMemoryAllocationBaseAndRegionSize(PVOID, PVOID*, PSIZE_T);
 
 INT main() {
 	HANDLE						hProcess;
-	NTSTATUS					ntStatus = ERROR_SUCCESS;
+	LONG						lRetVal = ERROR_SUCCESS;
 	STARTUPINFOA				startupInfo;
 	PROCESS_INFORMATION			processInformation = { 0 };
 	CFG_CALL_TARGET_INFO		cfgCallTargetInfoList[1];
@@ -48,26 +49,26 @@ INT main() {
 	//}
 	//
 	//dwPid = processInformation.dwProcessId;
-	//if ((hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION, FALSE, dwPid)) == INVALID_HANDLE_VALUE) {
-	//	ntStatus = ERROR_OPEN_FAILED;
-	//	goto lblCleanup;
-	//}
+	dwPid = GetCurrentProcessId();
+	if ((hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid)) == INVALID_HANDLE_VALUE) {
+		lRetVal = ERROR_OPEN_FAILED;
+		goto lblCleanup;
+	}
 
 	// Get memory allocation base and region size by calling VirtualProtect.
 	if (GetMemoryAllocationBaseAndRegionSize(pvAddressToAddCfgExceptionTo, &pvAllocationBase, &stRegionSize) == FALSE) {
-		ntStatus = ERROR_UNHANDLED_ERROR;
+		lRetVal = GetLastError();
 		goto lblCleanup;
 	}
 
 	//
 	// Add cfg exception
 	//
-	cfgCallTargetInfoList[0].Flags = CFG_CALL_TARGET_VALID;
+	cfgCallTargetInfoList[0].Flags = CFG_CALL_TARGET_CONVERT_EXPORT_SUPPRESSED_TO_VALID | CFG_CALL_TARGET_VALID;
 	cfgCallTargetInfoList[0].Offset = (ULONG_PTR)pvAddressToAddCfgExceptionTo - (ULONG_PTR)pvAllocationBase;;
-	
-	if (pSetProcessValidCallTargets(GetCurrentProcess(), pvAllocationBase, stRegionSize, 1, cfgCallTargetInfoList) == FALSE) {
-		printf("%d", GetLastError());
-		ntStatus = ERROR_UNHANDLED_ERROR;
+
+	if (pSetProcessValidCallTargets(hProcess, pvAllocationBase, stRegionSize, 1, cfgCallTargetInfoList) == FALSE) {
+		lRetVal = GetLastError();
 		goto lblCleanup;
 	}
 
@@ -80,7 +81,7 @@ lblCleanup:
 		CloseHandle(processInformation.hThread);
 	}
 
-	return ntStatus;
+	return lRetVal;
 }
 
 BOOL GetMemoryAllocationBaseAndRegionSize(PVOID pvAddress, PVOID* ppvAllocationBase, PSIZE_T pstRegionSize) {
@@ -92,7 +93,7 @@ BOOL GetMemoryAllocationBaseAndRegionSize(PVOID pvAddress, PVOID* ppvAllocationB
 		return FALSE;
 	}
 
-	*ppvAllocationBase = tMemoryBasicInformation.AllocationBase;
+	*ppvAllocationBase = tMemoryBasicInformation.BaseAddress;
 	*pstRegionSize = tMemoryBasicInformation.RegionSize;
 
 	return TRUE;
