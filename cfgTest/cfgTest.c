@@ -11,7 +11,7 @@ INT main() {
 	NTSTATUS					ntStatus = ERROR_SUCCESS;
 	STARTUPINFOA				startupInfo;
 	PROCESS_INFORMATION			processInformation = { 0 };
-	CFG_CALL_TARGET_INFO		cfgCallTargetInfo = { 0 };
+	CFG_CALL_TARGET_INFO		cfgCallTargetInfoList[1];
 	DWORD						dwPid = 0;
 	SIZE_T						stRegionSize = NULL;
 	PVOID						pvAllocationBase = NULL;
@@ -21,29 +21,19 @@ INT main() {
 	PVOID						pvAddressToAddCfgExceptionTo = NULL;
 
 	//
-	// Get address of NtSetContextThread and SetProcessValidCallTargets
+	// Get address of SetProcessValidCallTargets
 	//
 	CONST HMODULE hNtdll = LoadLibraryW(L"ntdll.dll");
-	if (hNtdll) {
-		pvAddressToAddCfgExceptionTo = GetProcAddress(hNtdll, "NtSetContextThread");
-		if (hNtdll) {
-			FreeLibrary(hNtdll);
-		}
-	}
-	else {
-		return ERROR_MOD_NOT_FOUND;
-	}
-
 	CONST HMODULE hKernelbase = LoadLibraryW(L"Kernelbase.dll");
-	if (hKernelbase) {
+	if (hKernelbase && hNtdll) {
 		pSetProcessValidCallTargets = (SETPROCESSVALIDCALLTARGETS)GetProcAddress(hKernelbase, "SetProcessValidCallTargets");
-		if (hKernelbase) {
-			FreeLibrary(hKernelbase);
-		}
+		pvAddressToAddCfgExceptionTo = GetProcAddress(hNtdll, "NtSetContextThread");
 	}
 	else {
 		return ERROR_MOD_NOT_FOUND;
 	}
+	FreeLibrary(hNtdll);
+	FreeLibrary(hKernelbase);
 
 	//
 	// Create host process
@@ -51,20 +41,20 @@ INT main() {
 	//ZeroMemory(&startupInfo, sizeof startupInfo);
 	//startupInfo.cb = sizeof startupInfo;
 	//ZeroMemory(&processInformation, sizeof processInformation);
-
+	//
 	//if (!CreateProcessA(NULL, "\"notepad.exe\"", NULL, NULL, FALSE,
 	//	DETACHED_PROCESS, NULL, NULL, &startupInfo, &processInformation)) {
 	//	return ERROR_CREATE_FAILED;
 	//}
-
+	//
 	//dwPid = processInformation.dwProcessId;
-	//if ((hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid)) == INVALID_HANDLE_VALUE) {
+	//if ((hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION, FALSE, dwPid)) == INVALID_HANDLE_VALUE) {
 	//	ntStatus = ERROR_OPEN_FAILED;
 	//	goto lblCleanup;
 	//}
 
 	// Get memory allocation base and region size by calling VirtualProtect.
-	if (GetMemoryAllocationBaseAndRegionSize(pSetProcessValidCallTargets, &pvAllocationBase, &stRegionSize) == FALSE) {
+	if (GetMemoryAllocationBaseAndRegionSize(pvAddressToAddCfgExceptionTo, &pvAllocationBase, &stRegionSize) == FALSE) {
 		ntStatus = ERROR_UNHANDLED_ERROR;
 		goto lblCleanup;
 	}
@@ -72,10 +62,10 @@ INT main() {
 	//
 	// Add cfg exception
 	//
-	cfgCallTargetInfo.Flags = CFG_CALL_TARGET_VALID;
-	cfgCallTargetInfo.Offset = (ULONG_PTR)pSetProcessValidCallTargets - (ULONG_PTR)pvAllocationBase;;
+	cfgCallTargetInfoList[0].Flags = CFG_CALL_TARGET_VALID;
+	cfgCallTargetInfoList[0].Offset = (ULONG_PTR)pvAddressToAddCfgExceptionTo - (ULONG_PTR)pvAllocationBase;;
 	
-	if (pSetProcessValidCallTargets(GetCurrentProcess(), pvAllocationBase, stRegionSize, 1, &cfgCallTargetInfo) == FALSE) {
+	if (pSetProcessValidCallTargets(GetCurrentProcess(), pvAllocationBase, stRegionSize, 1, cfgCallTargetInfoList) == FALSE) {
 		printf("%d", GetLastError());
 		ntStatus = ERROR_UNHANDLED_ERROR;
 		goto lblCleanup;
