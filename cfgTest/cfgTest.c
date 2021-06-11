@@ -48,20 +48,20 @@ INT main() {
 	//
 	// Create host process
 	//
-	ZeroMemory(&startupInfo, sizeof startupInfo);
-	startupInfo.cb = sizeof startupInfo;
-	ZeroMemory(&processInformation, sizeof processInformation);
+	//ZeroMemory(&startupInfo, sizeof startupInfo);
+	//startupInfo.cb = sizeof startupInfo;
+	//ZeroMemory(&processInformation, sizeof processInformation);
 
-	if (!CreateProcessA(NULL, "\"notepad.exe\"", NULL, NULL, FALSE,
-		DETACHED_PROCESS, NULL, NULL, &startupInfo, &processInformation)) {
-		return ERROR_CREATE_FAILED;
-	}
+	//if (!CreateProcessA(NULL, "\"notepad.exe\"", NULL, NULL, FALSE,
+	//	DETACHED_PROCESS, NULL, NULL, &startupInfo, &processInformation)) {
+	//	return ERROR_CREATE_FAILED;
+	//}
 
-	dwPid = processInformation.dwProcessId;
-	if ((hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid)) == INVALID_HANDLE_VALUE) {
-		ntStatus = ERROR_OPEN_FAILED;
-		goto lblCleanup;
-	}
+	//dwPid = processInformation.dwProcessId;
+	//if ((hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPid)) == INVALID_HANDLE_VALUE) {
+	//	ntStatus = ERROR_OPEN_FAILED;
+	//	goto lblCleanup;
+	//}
 
 	// Get memory allocation base and region size by calling VirtualProtect.
 	if (GetMemoryAllocationBaseAndRegionSize(pSetProcessValidCallTargets, &pvAllocationBase, &stRegionSize) == FALSE) {
@@ -75,7 +75,7 @@ INT main() {
 	cfgCallTargetInfo.Flags = CFG_CALL_TARGET_VALID;
 	cfgCallTargetInfo.Offset = (ULONG_PTR)pSetProcessValidCallTargets - (ULONG_PTR)pvAllocationBase;;
 	
-	if (pSetProcessValidCallTargets(hProcess, pvAllocationBase, stRegionSize, 1, &cfgCallTargetInfo) == FALSE) {
+	if (pSetProcessValidCallTargets(GetCurrentProcess(), pvAllocationBase, stRegionSize, 1, &cfgCallTargetInfo) == FALSE) {
 		printf("%d", GetLastError());
 		ntStatus = ERROR_UNHANDLED_ERROR;
 		goto lblCleanup;
