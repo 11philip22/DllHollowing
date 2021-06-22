@@ -4,6 +4,11 @@
 ### This code works on my machine @ 22-06-2021
 Injects shellcode to remote process
 #### Explanation
+Create a `notepad.exe` process as host.  
+Load Dll into remote process by calling `LoadLibaryW` with a remote thread.  
+Get Dll AddressofEntryPoint.
+Write shellcode to AddressofEntryPoint and call shellcode with `CreateRemoteThread`.  
+
 #### References
 https://www.ired.team/offensive-security/code-injection-process-injection/modulestomping-dll-hollowing-shellcode-injection  
 
