@@ -20,11 +20,3 @@ I added usermode capabilities where all dll's drom system32 are copied to temp f
 #### Explanation
 #### References
 https://www.forrest-orr.net/post/malicious-memory-artifacts-part-i-dll-hollowing
-
-## PhantomDllHollowerEX
-### This is not working @ 22-06-2021
-The phantom dll hollower but in a remote process.   
-Copies Dll to temp if not run in privileged mode. I am unable to start a thread on the shellcode in the mapped section in the remote process.
-#### Explanation
-#### References
-https://www.forrest-orr.net/post/malicious-memory-artifacts-part-i-dll-hollowing
